@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\Bio-ISAC_Group13_GroupProject3.props" />
+</Project>
