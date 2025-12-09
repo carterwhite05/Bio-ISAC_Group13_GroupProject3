@@ -166,8 +166,16 @@ async function initializeInterview() {
 async function startNewInterview(user) {
   console.log('Starting new interview for user:', user);
   
+  // Check if skipUploads is in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const skipUploads = urlParams.get('skipUploads') === 'true';
+  
   try {
-    const response = await fetch(`${API_BASE}/conversations/start`, {
+    const url = skipUploads 
+      ? `${API_BASE}/conversations/start?skipUploads=true`
+      : `${API_BASE}/conversations/start`;
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -187,12 +195,8 @@ async function startNewInterview(user) {
         errorMessage = error.detail || error.message || errorMessage;
         console.error('Start conversation error:', error);
         
-        if (error.detail && error.detail.includes('already have an active interview')) {
-          // Reload page to get the existing conversation
-          console.log('Active interview exists, reloading page...');
-          window.location.reload();
-          return;
-        }
+        // Allow multiple interviews - no longer blocking on active interview
+        // Removed the check for "already have an active interview" to allow multiple attempts
       } catch (parseError) {
         console.error('Failed to parse error response:', parseError);
         errorMessage = `Server returned ${response.status}: ${response.statusText}`;
@@ -202,15 +206,17 @@ async function startNewInterview(user) {
 
     const data = await response.json();
     console.log('Start conversation response data:', data);
+    console.log('Response keys:', Object.keys(data));
     
-    if (!data || !data.conversationId) {
+    // Handle both camelCase and PascalCase property names
+    conversationId = data.conversationId || data.ConversationId;
+    clientId = data.clientId || data.ClientId;
+    currentQuestionId = data.currentQuestionId || data.CurrentQuestionId || null;
+    
+    if (!conversationId) {
       console.error('Invalid response data:', data);
       throw new Error('Invalid response from server - missing conversationId');
     }
-    
-    conversationId = data.conversationId;
-    clientId = data.clientId;
-    currentQuestionId = data.currentQuestionId || null;
     
     console.log('Conversation started:', { conversationId, clientId, currentQuestionId });
 
@@ -232,14 +238,19 @@ async function startNewInterview(user) {
 
     // Display initial message
     if (chatMessages) {
-      if (data.initialMessage) {
-        console.log('Displaying initial message:', data.initialMessage);
-        addMessage('assistant', data.initialMessage);
+      // Check for both camelCase and PascalCase property names
+      const initialMessage = data.initialMessage || data.InitialMessage;
+      
+      if (initialMessage) {
+        console.log('Displaying initial message:', initialMessage);
+        addMessage('assistant', initialMessage);
         messageCount = 1;
         updateMessageCount();
         updateProgress();
       } else {
         console.error('No initial message in response:', data);
+        console.error('Response keys:', Object.keys(data));
+        
         // Fallback: try to load messages from server
         addMessage('assistant', 'Hello! Let\'s begin the interview. Loading your conversation...');
         
@@ -482,7 +493,7 @@ async function handleMessageForm(e) {
     sendButton.innerHTML = '<i class="bi bi-send-fill"></i>';
     setTimeout(() => messageInput.focus(), 100);
   }
-});
+}
 
 // Add Enter key support
 function handleKeyDown(e) {

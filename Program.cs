@@ -51,6 +51,12 @@ builder.Services.AddSession(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Configure JSON serialization to use camelCase
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+});
+
 var app = builder.Build();
 
 // Ensure database is created and seeded
@@ -449,22 +455,31 @@ app.MapPost("/api/conversations/start", async (StartConversationRequest request,
         return Results.Unauthorized();
     }
 
-    // Check if required documents are uploaded
-    var requiredTypes = new[] { "ID", "Passport", "VerificationPhoto", "VerificationVideo" };
-    var uploadedTypes = await db.Documents
-        .Where(d => d.ClientId == clientId.Value && requiredTypes.Contains(d.DocumentType))
-        .Select(d => d.DocumentType)
-        .Distinct()
-        .ToListAsync();
+    // Check if skipUploads is requested (for school project demo)
+    // Read from query string (frontend will append ?skipUploads=true to the URL)
+    var skipUploads = context.Request.Query.ContainsKey("skipUploads") && 
+                      context.Request.Query["skipUploads"].ToString().ToLower() == "true";
 
-    var missingTypes = requiredTypes.Where(t => !uploadedTypes.Contains(t)).ToList();
-    if (missingTypes.Any())
+    // Only check documents if not skipping
+    if (!skipUploads)
     {
-        return Results.BadRequest(new
+        var requiredTypes = new[] { "ID", "Passport", "ProofOfResidency", "VerificationPhoto", "VerificationVideo" };
+        var uploadedTypes = await db.Documents
+            .Where(d => d.ClientId == clientId.Value && requiredTypes.Contains(d.DocumentType))
+            .Select(d => d.DocumentType)
+            .Distinct()
+            .ToListAsync();
+
+        var missingTypes = requiredTypes.Where(t => !uploadedTypes.Contains(t)).ToList();
+        if (missingTypes.Any())
         {
-            message = "Please upload all required documents and complete verification steps before starting the interview",
-            missingDocuments = missingTypes
-        });
+            return Results.BadRequest(new
+            {
+                message = "Please upload all required documents and complete verification steps before starting the interview",
+                missingDocuments = missingTypes,
+                canSkip = true
+            });
+        }
     }
 
     try
@@ -710,7 +725,7 @@ app.MapGet("/api/documents/check", async (HttpContext context, VettingDbContext 
 
     try
     {
-        var requiredTypes = new[] { "ID", "Passport", "VerificationPhoto", "VerificationVideo" };
+        var requiredTypes = new[] { "ID", "Passport", "ProofOfResidency", "VerificationPhoto", "VerificationVideo" };
         var uploadedTypes = await db.Documents
             .Where(d => d.ClientId == clientId.Value && requiredTypes.Contains(d.DocumentType))
             .Select(d => d.DocumentType)

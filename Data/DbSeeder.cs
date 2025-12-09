@@ -26,16 +26,16 @@ public static class DbSeeder
 
         // Questions
         context.Questions.AddRange(
-            new Question { QuestionText = "Can you tell me about your current business or professional situation?", Category = "business_life", Priority = 10, IsRequired = true },
-            new Question { QuestionText = "What are your main goals for seeking our services?", Category = "goals", Priority = 10, IsRequired = true },
-            new Question { QuestionText = "Tell me about your family and personal life.", Category = "personal_life", Priority = 8, IsRequired = true },
-            new Question { QuestionText = "What was your childhood like? Where did you grow up?", Category = "childhood", Priority = 7, IsRequired = false },
-            new Question { QuestionText = "What is your educational background?", Category = "education", Priority = 7, IsRequired = true },
-            new Question { QuestionText = "What are your core values?", Category = "values", Priority = 9, IsRequired = true },
-            new Question { QuestionText = "Can you describe your financial situation?", Category = "financial", Priority = 8, IsRequired = true },
-            new Question { QuestionText = "Have you worked with similar services before?", Category = "background", Priority = 6, IsRequired = false },
-            new Question { QuestionText = "What challenges are you currently facing?", Category = "business_life", Priority = 8, IsRequired = true },
-            new Question { QuestionText = "Who are the most important people in your life?", Category = "family", Priority = 7, IsRequired = false }
+            new Question { QuestionText = "Can you tell me about your current business or professional situation?", Category = "business_life", Priority = 10, IsRequired = true, IsActive = true },
+            new Question { QuestionText = "What are your main goals for seeking our services?", Category = "goals", Priority = 10, IsRequired = true, IsActive = true },
+            new Question { QuestionText = "Tell me about your family and personal life.", Category = "personal_life", Priority = 8, IsRequired = true, IsActive = true },
+            new Question { QuestionText = "What was your childhood like? Where did you grow up?", Category = "childhood", Priority = 7, IsRequired = false, IsActive = true },
+            new Question { QuestionText = "What is your educational background?", Category = "education", Priority = 7, IsRequired = true, IsActive = true },
+            new Question { QuestionText = "What are your core values?", Category = "values", Priority = 9, IsRequired = true, IsActive = true },
+            new Question { QuestionText = "Can you describe your financial situation?", Category = "financial", Priority = 8, IsRequired = true, IsActive = true },
+            new Question { QuestionText = "Have you worked with similar services before?", Category = "background", Priority = 6, IsRequired = false, IsActive = true },
+            new Question { QuestionText = "What challenges are you currently facing?", Category = "business_life", Priority = 8, IsRequired = true, IsActive = true },
+            new Question { QuestionText = "Who are the most important people in your life?", Category = "family", Priority = 7, IsRequired = false, IsActive = true }
         );
 
         // Criteria

@@ -49,16 +49,9 @@ public class ConversationService
             }
             else
             {
-                // Check if client already has an active conversation
-                var existingConversation = await _context.Conversations
-                    .Where(c => c.ClientId == client.Id && c.Status == ConversationStatus.Active)
-                    .FirstOrDefaultAsync();
+                // Allow multiple interviews - no limit for school project
+                // Previously checked for active conversation, but now allowing multiple attempts
                 
-                if (existingConversation != null)
-                {
-                    throw new InvalidOperationException("You already have an active interview. Please complete it before starting a new one.");
-                }
-
                 // Update client status if starting new conversation
                 client.Status = ClientStatus.InProgress;
                 client.FirstName = request.FirstName ?? client.FirstName;

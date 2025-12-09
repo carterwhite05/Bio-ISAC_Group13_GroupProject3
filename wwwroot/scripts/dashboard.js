@@ -101,7 +101,7 @@ async function loadDashboard() {
         credentials: 'include'
       });
       
-      let documentsStatus = { allUploaded: false, uploadedTypes: [], missingTypes: ['ID', 'Passport', 'VerificationPhoto', 'VerificationVideo'] };
+      let documentsStatus = { allUploaded: false, uploadedTypes: [], missingTypes: ['ID', 'Passport', 'ProofOfResidency', 'VerificationPhoto', 'VerificationVideo'] };
       if (documentsCheckResponse.ok) {
         documentsStatus = await documentsCheckResponse.json();
       }
@@ -177,23 +177,34 @@ async function loadDashboard() {
             </div>
             <div class="mt-3">
               ${conversation.status === 'Active' ? `
-                <a href="index.html" class="btn btn-primary">
-                  <i class="bi bi-arrow-right-circle me-2"></i>Continue Interview
-                </a>
+                <div class="d-flex gap-2 justify-content-center">
+                  <a href="index.html" class="btn btn-primary">
+                    <i class="bi bi-arrow-right-circle me-2"></i>Continue Interview
+                  </a>
+                  <a href="index.html?skipUploads=true" class="btn btn-outline-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Start New Interview
+                  </a>
+                </div>
               ` : `
-                <p class="text-secondary mb-0">Interview ${conversation.status.toLowerCase()}. Your responses are being reviewed.</p>
+                <div class="d-flex gap-2 justify-content-center flex-wrap">
+                  <p class="text-secondary mb-0 me-3 align-self-center">Interview ${conversation.status.toLowerCase()}. Your responses are being reviewed.</p>
+                  <a href="index.html?skipUploads=true" class="btn btn-outline-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Start New Interview
+                  </a>
+                </div>
               `}
             </div>
           </div>
         `;
       } else {
         // Show start interview button (only if documents are uploaded)
-        // Check if all required documents are uploaded (ID, Passport, VerificationPhoto, VerificationVideo)
+        // Check if all required documents are uploaded (ID, Passport, ProofOfResidency, VerificationPhoto, VerificationVideo)
         const hasID = documentsStatus.uploadedTypes.includes('ID');
         const hasPassport = documentsStatus.uploadedTypes.includes('Passport');
+        const hasProofOfResidency = documentsStatus.uploadedTypes.includes('ProofOfResidency');
         const hasPhoto = documentsStatus.uploadedTypes.includes('VerificationPhoto');
         const hasVideo = documentsStatus.uploadedTypes.includes('VerificationVideo');
-        const allDocumentsUploaded = hasID && hasPassport && hasPhoto && hasVideo;
+        const allDocumentsUploaded = hasID && hasPassport && hasProofOfResidency && hasPhoto && hasVideo;
         
         if (allDocumentsUploaded) {
           interviewSection.innerHTML = `
@@ -216,10 +227,15 @@ async function loadDashboard() {
               </div>
               <h4 class="text-white mb-3">Upload Documents First</h4>
               <p class="text-secondary mb-4">Please upload all required documents before starting your interview.</p>
-              <p class="text-warning mb-0">
+              <p class="text-warning mb-3">
                 <i class="bi bi-exclamation-triangle me-2"></i>
                 Missing: ${documentsStatus.missingTypes.join(', ')}
               </p>
+              <div class="d-flex gap-2 justify-content-center">
+                <a href="index.html?skipUploads=true" class="btn btn-outline-warning">
+                  <i class="bi bi-skip-forward me-2"></i>Skip Uploads (Demo)
+                </a>
+              </div>
             </div>
           `;
         }
@@ -245,7 +261,7 @@ function updateDocumentsSection(documentsStatus, documents) {
   const documentsSection = document.getElementById('documentsSection');
   if (!documentsSection) return;
 
-  const requiredTypes = ['ID', 'Passport'];
+  const requiredTypes = ['ID', 'Passport', 'ProofOfResidency'];
   const uploadedByType = {};
   documents.forEach(doc => {
     if (!uploadedByType[doc.documentType]) {
@@ -265,17 +281,24 @@ function updateDocumentsSection(documentsStatus, documents) {
     const uploaded = uploadedByType[type] || [];
     const isUploaded = uploaded.length > 0;
     
+    // Custom descriptions for specific document types
+    let description = '';
+    if (type === 'ProofOfResidency') {
+      description = '<small class="text-secondary d-block"><i class="bi bi-info-circle me-1"></i>Bills or statements showing name, email, phone, and address</small>';
+    }
+    
     documentsHTML += `
       <div class="info-item">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <span class="info-label">${type}</span>
+            <span class="info-label">${type === 'ProofOfResidency' ? 'Proof of Residency' : type}</span>
+            ${description}
             ${isUploaded ? `
-              <small class="text-success d-block">
+              <small class="text-success d-block mt-1">
                 <i class="bi bi-check-circle me-1"></i>Uploaded: ${uploaded[0].fileName}
               </small>
             ` : `
-              <small class="text-warning d-block">
+              <small class="text-warning d-block mt-1">
                 <i class="bi bi-x-circle me-1"></i>Not uploaded
               </small>
             `}
@@ -393,10 +416,11 @@ function updateDocumentsSection(documentsStatus, documents) {
 }
 
 // Show upload modal
-function showUploadModal(documentType) {
+window.showUploadModal = function(documentType) {
   const modal = document.getElementById('uploadModal');
   const documentTypeInput = document.getElementById('uploadDocumentType');
   const fileInput = document.getElementById('uploadFileInput');
+  const instructionsDiv = document.getElementById('uploadDocumentInstructions');
   
   if (documentTypeInput) {
     documentTypeInput.value = documentType;
@@ -405,10 +429,61 @@ function showUploadModal(documentType) {
     fileInput.value = '';
   }
   
+  // Show specific instructions for Proof of Residency
+  if (instructionsDiv) {
+    if (documentType === 'ProofOfResidency') {
+      instructionsDiv.innerHTML = `
+        <div class="alert alert-info mb-0 mt-2">
+          <small>
+            <strong>Acceptable documents:</strong> Utility bills, bank statements, credit card statements, 
+            or other official documents that clearly show your name, email address, phone number, and physical address.
+          </small>
+        </div>
+      `;
+    } else {
+      instructionsDiv.innerHTML = '';
+    }
+  }
+  
   // Show Bootstrap modal
   const bootstrapModal = new bootstrap.Modal(modal);
   bootstrapModal.show();
-}
+};
+
+// Show upload modal
+window.showUploadModal = function(documentType) {
+  const modal = document.getElementById('uploadModal');
+  const documentTypeInput = document.getElementById('uploadDocumentType');
+  const fileInput = document.getElementById('uploadFileInput');
+  const instructionsDiv = document.getElementById('uploadDocumentInstructions');
+  
+  if (documentTypeInput) {
+    documentTypeInput.value = documentType;
+  }
+  if (fileInput) {
+    fileInput.value = '';
+  }
+  
+  // Show specific instructions for Proof of Residency
+  if (instructionsDiv) {
+    if (documentType === 'ProofOfResidency') {
+      instructionsDiv.innerHTML = `
+        <div class="alert alert-info mb-0 mt-2">
+          <small>
+            <strong>Acceptable documents:</strong> Utility bills, bank statements, credit card statements, 
+            or other official documents that clearly show your name, email address, phone number, and physical address.
+          </small>
+        </div>
+      `;
+    } else {
+      instructionsDiv.innerHTML = '';
+    }
+  }
+  
+  // Show Bootstrap modal
+  const bootstrapModal = new bootstrap.Modal(modal);
+  bootstrapModal.show();
+};
 
 // Delete document
 async function deleteDocument(documentId) {
