@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interview Status - AI Vetting System</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    />
+
+    <!-- Bootstrap Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+    />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="./styles/main.css?v=4" />
+    <link rel="stylesheet" href="./styles/chat.css?v=3" />
+    <style>
+      /* Dashboard specific styles */
+      .dashboard-container {
+        min-height: calc(100vh - 72px);
+        padding: 2rem;
+        background: var(--bg-primary);
+      }
+
+      .status-card {
+        background: var(--bg-card);
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border);
+        margin-bottom: 2rem;
+      }
+
+      .status-badge {
+        font-size: 1.1rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+      }
+
+      .progress-section {
+        margin-top: 2rem;
+      }
+
+      .info-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .info-item:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+
+      .info-value {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary">
+      <div class="container-fluid px-4">
+        <span class="navbar-brand mb-0 d-flex align-items-center gap-2">
+          <i class="bi bi-clipboard-check fs-4"></i>
+          <span>Interview Status</span>
+        </span>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-light" onclick="logout()">
+            <i class="bi bi-box-arrow-right"></i> Logout
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="dashboard-container">
+      <div class="container">
+        <div id="loadingState" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <p class="text-secondary mt-3">Loading your interview status...</p>
+        </div>
+
+        <div id="dashboardContent" class="d-none">
+          <div class="row">
+            <div class="col-lg-8 mx-auto">
+              <div class="status-card">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                  <div>
+                    <h2 class="text-white mb-1" id="clientName">Your Interview Status</h2>
+                    <p class="text-secondary mb-0" id="clientEmail"></p>
+                  </div>
+                  <div id="statusBadge"></div>
+                </div>
+
+                <div class="info-item">
+                  <span class="info-label">Username</span>
+                  <span class="info-value" id="username">-</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Full Name</span>
+                  <span class="info-value" id="fullName">-</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Email</span>
+                  <span class="info-value" id="emailDisplay">-</span>
+                </div>
+
+                <div class="info-item">
+                  <span class="info-label">Interview Status</span>
+                  <span class="info-value" id="statusText"></span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Created</span>
+                  <span class="info-value" id="createdAt">-</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Last Updated</span>
+                  <span class="info-value" id="updatedAt">-</span>
+                </div>
+              </div>
+
+              <div id="documentsSection">
+                <!-- Documents section will be dynamically loaded here -->
+              </div>
+
+              <div id="interviewSection">
+                <!-- Interview section will be dynamically loaded here -->
+              </div>
+
+              <div class="status-card">
+                <h4 class="text-white mb-3">What's Next?</h4>
+                <div id="statusMessage" class="text-secondary">
+                  <!-- Status-specific message will be displayed here -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="errorState" class="d-none text-center py-5">
+          <div class="alert alert-danger">
+            <h5><i class="bi bi-exclamation-triangle me-2"></i>Unable to Load Status</h5>
+            <p class="mb-0">We couldn't find your interview information. Please make sure you completed an interview.</p>
+            <a href="index.html" class="btn btn-primary mt-3">Start New Interview</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Verification Photo Modal -->
+    <div class="modal fade" id="verificationPhotoModal" tabindex="-1" aria-labelledby="verificationPhotoModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border);">
+          <div class="modal-header" style="border-bottom: 1px solid var(--border);">
+            <h5 class="modal-title text-white" id="verificationPhotoModalLabel">
+              <i class="bi bi-camera me-2"></i>Verification Photo Upload
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-info">
+              <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Instructions</h6>
+              <p class="mb-0">Please take a photo of yourself holding a piece of paper with:</p>
+              <ul class="mb-0 mt-2">
+                <li>Your full name</li>
+                <li>Today's date: <strong id="currentDate"></strong></li>
+              </ul>
+            </div>
+            <form id="verificationPhotoForm">
+              <input type="hidden" id="verificationPhotoDocumentType" name="documentType" value="VerificationPhoto">
+              <div class="mb-3">
+                <label for="verificationPhotoInput" class="form-label text-white">Select Photo</label>
+                <input type="file" class="form-control" id="verificationPhotoInput" name="file" accept="image/*" capture="user" required>
+                <small class="text-secondary">Accepted formats: JPG, PNG (max 10MB)</small>
+              </div>
+              <div id="photoPreview" class="mb-3 d-none">
+                <img id="photoPreviewImg" src="" alt="Preview" class="img-fluid rounded" style="max-height: 300px;">
+              </div>
+              <div class="alert alert-info d-none" id="verificationPhotoAlert"></div>
+            </form>
+          </div>
+          <div class="modal-footer" style="border-top: 1px solid var(--border);">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="handleVerificationPhotoUpload()">Upload Photo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Verification Video Modal -->
+    <div class="modal fade" id="verificationVideoModal" tabindex="-1" aria-labelledby="verificationVideoModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border);">
+          <div class="modal-header" style="border-bottom: 1px solid var(--border);">
+            <h5 class="modal-title text-white" id="verificationVideoModalLabel">
+              <i class="bi bi-camera-video me-2"></i>Verification Video Recording
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-info mb-3">
+              <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Instructions</h6>
+              <p class="mb-0">You will be given a random phrase to say. Record yourself saying it clearly within 120 seconds.</p>
+            </div>
+            
+            <div id="videoSetupSection">
+              <div class="text-center mb-3">
+                <button class="btn btn-primary btn-lg" onclick="startVideoRecording()">
+                  <i class="bi bi-record-circle me-2"></i>Start Recording
+                </button>
+              </div>
+            </div>
+
+            <div id="videoRecordingSection" class="d-none">
+              <div class="card mb-3" style="background: var(--bg-secondary); border: 1px solid var(--border);">
+                <div class="card-body text-center">
+                  <h5 class="text-white mb-3">Say this phrase:</h5>
+                  <div class="alert alert-warning mb-3">
+                    <h4 id="randomPhrase" class="mb-0"></h4>
+                  </div>
+                  <div class="mb-3">
+                    <div id="videoTimer" class="h3 text-white mb-2">2:00</div>
+                    <small class="text-secondary">Time remaining</small>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="text-center mb-3">
+                <video id="videoPreview" autoplay muted playsinline class="w-100 rounded" style="max-height: 300px; background: #000;"></video>
+              </div>
+              
+              <div class="text-center mb-3">
+                <button id="stopRecordingBtn" class="btn btn-danger btn-lg me-2" onclick="stopVideoRecording()">
+                  <i class="bi bi-stop-circle me-2"></i>Stop Recording
+                </button>
+              </div>
+            </div>
+
+            <div id="videoReviewSection" class="d-none">
+              <div class="text-center mb-3">
+                <video id="recordedVideo" controls class="w-100 rounded" style="max-height: 300px; background: #000;"></video>
+              </div>
+              <div class="alert alert-info d-none" id="verificationVideoAlert"></div>
+            </div>
+          </div>
+          <div class="modal-footer" style="border-top: 1px solid var(--border);">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" id="submitVideoBtn" class="btn btn-primary d-none" onclick="handleVerificationVideoSubmit()">Submit Video</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border);">
+          <div class="modal-header" style="border-bottom: 1px solid var(--border);">
+            <h5 class="modal-title text-white" id="uploadModalLabel">Upload Document</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="uploadForm">
+              <input type="hidden" id="uploadDocumentType" name="documentType">
+              <div class="mb-3">
+                <label for="uploadFileInput" class="form-label text-white">Select File</label>
+                <input type="file" class="form-control" id="uploadFileInput" name="file" accept=".jpg,.jpeg,.png,.pdf" required>
+                <small class="text-secondary">Accepted formats: JPG, PNG, PDF (max 10MB)</small>
+              </div>
+              <div class="alert alert-info d-none" id="uploadAlert"></div>
+            </form>
+          </div>
+          <div class="modal-footer" style="border-top: 1px solid var(--border);">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="handleDocumentUpload()">Upload</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS bundle -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+      crossorigin="anonymous"
+    ></script>
+
+    <!-- Custom JS -->
+    <script src="./scripts/auth.js"></script>
+    <script src="./scripts/dashboard.js"></script>
+    <script>
+      // Set current date for verification photo
+      document.getElementById('currentDate').textContent = new Date().toLocaleDateString();
+
+      // Random phrases for video verification
+      const randomPhrases = [
+        "The quick brown fox jumps over the lazy dog",
+        "Technology is the future of innovation",
+        "Education opens doors to endless possibilities",
+        "Success comes from hard work and dedication",
+        "Creativity is the key to solving problems",
+        "Knowledge is power when applied wisely",
+        "Teamwork makes the dream work",
+        "Innovation drives progress in every field",
+        "Learning never stops throughout life",
+        "Excellence is a habit, not an accident"
+      ];
+
+      let mediaRecorder = null;
+      let recordedChunks = [];
+      let videoStream = null;
+      let timerInterval = null;
+      let timeRemaining = 120; // 120 seconds
+      let currentPhrase = '';
+
+      // Show verification photo modal
+      window.showVerificationPhotoModal = function() {
+        const modal = document.getElementById('verificationPhotoModal');
+        const photoInput = document.getElementById('verificationPhotoInput');
+        const preview = document.getElementById('photoPreview');
+        const previewImg = document.getElementById('photoPreviewImg');
+        
+        if (photoInput) {
+          photoInput.value = '';
+        }
+        if (preview) {
+          preview.classList.add('d-none');
+        }
+        
+        // Preview photo when selected
+        if (photoInput) {
+          photoInput.onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = function(event) {
+                previewImg.src = event.target.result;
+                preview.classList.remove('d-none');
+              };
+              reader.readAsDataURL(file);
+            }
+          };
+        }
+        
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+      };
+
+      // Handle verification photo upload
+      window.handleVerificationPhotoUpload = async function() {
+        const fileInput = document.getElementById('verificationPhotoInput');
+        const uploadAlert = document.getElementById('verificationPhotoAlert');
+        const uploadBtn = event.target;
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+          uploadAlert.textContent = 'Please select a photo';
+          uploadAlert.classList.remove('d-none', 'alert-success');
+          uploadAlert.classList.add('alert-danger');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('documentType', 'VerificationPhoto');
+
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
+        uploadAlert.classList.add('d-none');
+
+        try {
+          const response = await fetch('/api/documents/upload', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Upload failed');
+          }
+
+          const result = await response.json();
+          uploadAlert.textContent = result.message || 'Verification photo uploaded successfully!';
+          uploadAlert.classList.remove('d-none', 'alert-danger');
+          uploadAlert.classList.add('alert-success');
+
+          setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('verificationPhotoModal'));
+            modal.hide();
+            loadDashboard();
+          }, 1500);
+        } catch (error) {
+          uploadAlert.textContent = error.message || 'Failed to upload photo';
+          uploadAlert.classList.remove('d-none', 'alert-success');
+          uploadAlert.classList.add('alert-danger');
+          uploadBtn.disabled = false;
+          uploadBtn.innerHTML = 'Upload Photo';
+        }
+      };
+
+      // Show verification video modal
+      window.showVerificationVideoModal = function() {
+        const modal = document.getElementById('verificationVideoModal');
+        const setupSection = document.getElementById('videoSetupSection');
+        const recordingSection = document.getElementById('videoRecordingSection');
+        const reviewSection = document.getElementById('videoReviewSection');
+        const submitBtn = document.getElementById('submitVideoBtn');
+        
+        // Reset state
+        setupSection.classList.remove('d-none');
+        recordingSection.classList.add('d-none');
+        reviewSection.classList.add('d-none');
+        submitBtn.classList.add('d-none');
+        
+        // Stop any existing streams
+        if (videoStream) {
+          videoStream.getTracks().forEach(track => track.stop());
+          videoStream = null;
+        }
+        
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+      };
+
+      // Start video recording
+      window.startVideoRecording = async function() {
+        try {
+          // Generate random phrase
+          currentPhrase = randomPhrases[Math.floor(Math.random() * randomPhrases.length)];
+          document.getElementById('randomPhrase').textContent = currentPhrase;
+          
+          // Request camera access
+          videoStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'user' }, 
+            audio: true 
+          });
+          
+          const videoPreview = document.getElementById('videoPreview');
+          videoPreview.srcObject = videoStream;
+          
+          // Setup MediaRecorder
+          recordedChunks = [];
+          mediaRecorder = new MediaRecorder(videoStream, {
+            mimeType: 'video/webm;codecs=vp8,opus'
+          });
+          
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              recordedChunks.push(event.data);
+            }
+          };
+          
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const recordedVideo = document.getElementById('recordedVideo');
+            recordedVideo.src = URL.createObjectURL(blob);
+          };
+          
+          // Start recording
+          mediaRecorder.start();
+          
+          // Show recording UI
+          document.getElementById('videoSetupSection').classList.add('d-none');
+          document.getElementById('videoRecordingSection').classList.remove('d-none');
+          
+          // Start timer
+          timeRemaining = 120;
+          updateTimer();
+          timerInterval = setInterval(() => {
+            timeRemaining--;
+            updateTimer();
+            if (timeRemaining <= 0) {
+              stopVideoRecording();
+            }
+          }, 1000);
+          
+        } catch (error) {
+          console.error('Error accessing camera:', error);
+          alert('Unable to access camera. Please ensure you have granted camera permissions.');
+        }
+      };
+
+      // Update timer display
+      function updateTimer() {
+        const minutes = Math.floor(timeRemaining / 60);
+        const seconds = timeRemaining % 60;
+        const timerDisplay = document.getElementById('videoTimer');
+        timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        if (timeRemaining <= 30) {
+          timerDisplay.classList.add('text-danger');
+        } else {
+          timerDisplay.classList.remove('text-danger');
+        }
+      }
+
+      // Stop video recording
+      window.stopVideoRecording = function() {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+        
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+        
+        if (videoStream) {
+          videoStream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Show review section
+        document.getElementById('videoRecordingSection').classList.add('d-none');
+        document.getElementById('videoReviewSection').classList.remove('d-none');
+        document.getElementById('submitVideoBtn').classList.remove('d-none');
+      };
+
+      // Handle verification video submit
+      window.handleVerificationVideoSubmit = async function() {
+        const submitBtn = event.target;
+        const uploadAlert = document.getElementById('verificationVideoAlert');
+        
+        if (recordedChunks.length === 0) {
+          uploadAlert.textContent = 'No video recorded';
+          uploadAlert.classList.remove('d-none', 'alert-success');
+          uploadAlert.classList.add('alert-danger');
+          return;
+        }
+        
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const formData = new FormData();
+        formData.append('file', blob, 'verification-video.webm');
+        formData.append('documentType', 'VerificationVideo');
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+        uploadAlert.classList.add('d-none');
+        
+        try {
+          const response = await fetch('/api/documents/upload', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+          });
+          
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Upload failed');
+          }
+          
+          const result = await response.json();
+          uploadAlert.textContent = result.message || 'Verification video submitted successfully!';
+          uploadAlert.classList.remove('d-none', 'alert-danger');
+          uploadAlert.classList.add('alert-success');
+          
+          setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('verificationVideoModal'));
+            modal.hide();
+            loadDashboard();
+          }, 1500);
+        } catch (error) {
+          uploadAlert.textContent = error.message || 'Failed to submit video';
+          uploadAlert.classList.remove('d-none', 'alert-success');
+          uploadAlert.classList.add('alert-danger');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Submit Video';
+        }
+      };
+
+      // Handle document upload
+      async function handleDocumentUpload() {
+        const fileInput = document.getElementById('uploadFileInput');
+        const documentType = document.getElementById('uploadDocumentType').value;
+        const uploadAlert = document.getElementById('uploadAlert');
+        const uploadBtn = event.target;
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+          uploadAlert.textContent = 'Please select a file';
+          uploadAlert.classList.remove('d-none', 'alert-success');
+          uploadAlert.classList.add('alert-danger');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('documentType', documentType);
+
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
+        uploadAlert.classList.add('d-none');
+
+        try {
+          const response = await fetch('/api/documents/upload', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Upload failed');
+          }
+
+          const result = await response.json();
+          uploadAlert.textContent = result.message || 'Document uploaded successfully!';
+          uploadAlert.classList.remove('d-none', 'alert-danger');
+          uploadAlert.classList.add('alert-success');
+
+          // Close modal and reload dashboard after a short delay
+          setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
+            modal.hide();
+            loadDashboard();
+          }, 1500);
+        } catch (error) {
+          uploadAlert.textContent = error.message || 'Failed to upload document';
+          uploadAlert.classList.remove('d-none', 'alert-success');
+          uploadAlert.classList.add('alert-danger');
+          uploadBtn.disabled = false;
+          uploadBtn.innerHTML = 'Upload';
+        }
+      }
+    </script>
+  </body>
+</html>
+

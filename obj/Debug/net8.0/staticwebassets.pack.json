@@ -9,12 +9,24 @@
       "PackagePath": "staticwebassets\\clients.html"
     },
     {
+      "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\dashboard.html",
+      "PackagePath": "staticwebassets\\dashboard.html"
+    },
+    {
       "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\index.html",
       "PackagePath": "staticwebassets\\index.html"
     },
     {
+      "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\login.html",
+      "PackagePath": "staticwebassets\\login.html"
+    },
+    {
       "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\scripts\\admin.js",
       "PackagePath": "staticwebassets\\scripts\\admin.js"
+    },
+    {
+      "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\scripts\\auth.js",
+      "PackagePath": "staticwebassets\\scripts\\auth.js"
     },
     {
       "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\scripts\\chat.js",
@@ -23,6 +35,14 @@
     {
       "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\scripts\\clients.js",
       "PackagePath": "staticwebassets\\scripts\\clients.js"
+    },
+    {
+      "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\scripts\\dashboard.js",
+      "PackagePath": "staticwebassets\\scripts\\dashboard.js"
+    },
+    {
+      "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\scripts\\login.js",
+      "PackagePath": "staticwebassets\\scripts\\login.js"
     },
     {
       "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\styles\\chat.css",

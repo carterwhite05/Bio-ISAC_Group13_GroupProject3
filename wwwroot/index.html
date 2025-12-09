@@ -3,7 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AI Vetting System - Chat</title>
+    <title>Interview System - Interview</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
 
     <!-- Bootstrap CSS -->
     <link
@@ -20,93 +28,107 @@
     />
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="./styles/chat.css" />
+    <link rel="stylesheet" href="./styles/chat.css?v=3" />
+    <link rel="stylesheet" href="./styles/main.css?v=3" />
   </head>
   <body>
-    <nav class="navbar navbar-dark bg-primary">
-      <div class="container-fluid">
-        <span class="navbar-brand mb-0 h1">AI Vetting System</span>
-        <div>
-          <a href="admin.html" class="btn btn-sm btn-light">Admin Panel</a>
-          <a href="clients.html" class="btn btn-sm btn-light">View Clients</a>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary">
+      <div class="container-fluid px-4">
+        <span class="navbar-brand mb-0 d-flex align-items-center gap-2">
+          <i class="bi bi-clipboard-check fs-4"></i>
+          <span>Interview System</span>
+        </span>
+        <div class="d-flex gap-2">
+          <a href="dashboard.html" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-speedometer2"></i> Dashboard
+          </a>
+          <a href="admin.html" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-gear"></i> Admin
+          </a>
+          <a href="clients.html" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-people"></i> Clients
+          </a>
         </div>
       </div>
     </nav>
 
-    <div class="container-fluid h-100 d-flex flex-column">
-      <div id="welcomeScreen" class="row justify-content-center align-items-center flex-grow-1">
-        <div class="col-md-6 col-lg-4">
-          <div class="card shadow">
-            <div class="card-body">
-              <h2 class="card-title text-center mb-4">Welcome</h2>
-              <p class="text-secondary text-center">
-                Please provide your information to begin the vetting conversation.
-              </p>
-              <form id="startForm">
-                <div class="mb-3">
-                  <label for="email" class="form-label">Email *</label>
-                  <input
-                    type="email"
-                    class="form-control"
-                    id="email"
-                    required
-                  />
-                </div>
-                <div class="mb-3">
-                  <label for="firstName" class="form-label">First Name</label>
-                  <input type="text" class="form-control" id="firstName" />
-                </div>
-                <div class="mb-3">
-                  <label for="lastName" class="form-label">Last Name</label>
-                  <input type="text" class="form-control" id="lastName" />
-                </div>
-                <button type="submit" class="btn btn-primary w-100">
-                  Start Conversation
-                </button>
-              </form>
+    <!-- Main Content -->
+    <div class="main-container">
+      <!-- Chat/Interview Screen -->
+      <div id="chatScreen" class="screen active">
+        <div class="interview-container">
+          <div class="interview-header">
+            <div class="d-flex align-items-center gap-3">
+              <div class="interview-icon">
+                <i class="bi bi-chat-dots"></i>
+              </div>
+              <div>
+                <h5 class="mb-0" id="chatHeader">Interview in Progress</h5>
+                <small class="text-muted" id="messageCount">0 messages</small>
+              </div>
+            </div>
+            <div class="progress-container">
+              <div class="progress" style="height: 6px; width: 200px;">
+                <div
+                  class="progress-bar progress-bar-striped progress-bar-animated"
+                  id="progressBar"
+                  role="progressbar"
+                  style="width: 0%"
+                ></div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div id="chatScreen" class="row flex-grow-1 d-none">
-        <div class="col-12 d-flex flex-column h-100">
-          <div class="card shadow flex-grow-1 d-flex flex-column">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-              <span id="chatHeader">Conversation</span>
-              <span class="badge bg-light text-dark" id="messageCount">0 messages</span>
-            </div>
-            <div class="card-body overflow-auto flex-grow-1" id="chatMessages">
-              <!-- Messages will appear here -->
-            </div>
-            <div class="card-footer">
-              <form id="messageForm" class="d-flex gap-2">
+          <div class="interview-messages" id="chatMessages">
+            <!-- Messages will appear here -->
+          </div>
+
+          <div class="interview-input">
+            <form id="messageForm" class="input-form">
+              <div class="input-group">
                 <input
                   type="text"
-                  class="form-control"
+                  class="form-control form-control-lg"
                   id="messageInput"
-                  placeholder="Type your message..."
+                  placeholder="Type your answer..."
                   required
+                  autocomplete="off"
                 />
-                <button type="submit" class="btn btn-primary" id="sendButton">
-                  <i class="bi bi-send"></i> Send
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-lg"
+                  id="sendButton"
+                >
+                  <i class="bi bi-send-fill"></i>
                 </button>
-              </form>
-            </div>
+              </div>
+              <small class="input-hint">
+                <i class="bi bi-info-circle me-1"></i>
+                Press Enter to send your response
+              </small>
+            </form>
           </div>
         </div>
       </div>
 
-      <div id="completionScreen" class="row justify-content-center align-items-center flex-grow-1 d-none">
-        <div class="col-md-6 col-lg-4">
-          <div class="card shadow text-center">
-            <div class="card-body">
-              <i class="bi bi-check-circle text-success" style="font-size: 4rem"></i>
-              <h2 class="card-title mt-3">Thank You!</h2>
-              <p class="text-secondary">
-                Your conversation is complete. We'll review your information and get back to you soon.
-              </p>
-              <a href="index.html" class="btn btn-primary">Start New Conversation</a>
+      <!-- Completion Screen -->
+      <div id="completionScreen" class="screen">
+        <div class="completion-content">
+          <div class="completion-card">
+            <div class="completion-icon">
+              <i class="bi bi-check-circle-fill"></i>
+            </div>
+            <h1 class="completion-title">Thank You!</h1>
+            <p class="completion-message">
+              Your interview is complete. We've saved all your responses and
+              will review your information shortly.
+            </p>
+            <div class="completion-actions">
+              <a href="index.html" class="btn btn-primary btn-lg">
+                <i class="bi bi-arrow-repeat me-2"></i>
+                Start New Interview
+              </a>
             </div>
           </div>
         </div>
@@ -121,7 +143,41 @@
     ></script>
 
     <!-- Custom JS -->
+    <script src="./scripts/auth.js"></script>
     <script src="./scripts/chat.js"></script>
+    <script>
+      // Check authentication on page load
+      document.addEventListener('DOMContentLoaded', async () => {
+        // First check server session
+        try {
+          const response = await fetch('/api/auth/me', {
+            credentials: 'include'
+          });
+          
+          if (!response.ok) {
+            // Not authenticated, redirect to login
+            window.location.href = 'login.html';
+            return;
+          }
+          
+          // Authenticated - let the interview page load (don't redirect)
+          const user = await response.json();
+          
+          // Store in localStorage for frontend use
+          if (typeof setUserSession !== 'undefined') {
+            setUserSession({
+              email: user.email,
+              username: user.username,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              clientId: user.id
+            });
+          }
+        } catch (error) {
+          console.error('Auth check failed:', error);
+          window.location.href = 'login.html';
+        }
+      });
+    </script>
   </body>
 </html>
-

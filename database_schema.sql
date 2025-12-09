@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS conversations (
     ended_at TIMESTAMP NULL,
     status ENUM('active', 'completed', 'abandoned') DEFAULT 'active',
     total_messages INT DEFAULT 0,
+    current_question_id INT NULL,
+    waiting_for_additional_info BOOLEAN DEFAULT false,
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+    FOREIGN KEY (current_question_id) REFERENCES questions(id) ON DELETE SET NULL,
     INDEX idx_client (client_id),
     INDEX idx_status (status)
 );
@@ -73,6 +76,19 @@ CREATE TABLE IF NOT EXISTS asked_questions (
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
     UNIQUE KEY unique_conversation_question (conversation_id, question_id)
+);
+
+CREATE TABLE IF NOT EXISTS question_answers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id INT NOT NULL,
+    question_id INT NOT NULL,
+    answer TEXT NOT NULL,
+    additional_info TEXT NULL,
+    answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+    INDEX idx_conversation (conversation_id),
+    INDEX idx_question (question_id)
 );
 
 CREATE TABLE IF NOT EXISTS criteria (

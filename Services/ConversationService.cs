@@ -5,66 +5,101 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bio_ISAC_Group13_GroupProject3.Services;
 
+/// <summary>
+/// Service for managing structured interview conversations.
+/// Flow: User provides email/name -> System asks predetermined questions -> 
+/// After each question asks for additional info (yes/no) -> Saves answers by category
+/// </summary>
 public class ConversationService
 {
     private readonly VettingDbContext _context;
-    private readonly AIService _aiService;
-    private readonly DossierService _dossierService;
     private readonly ILogger<ConversationService> _logger;
 
     public ConversationService(
         VettingDbContext context, 
-        AIService aiService, 
-        DossierService dossierService,
         ILogger<ConversationService> logger)
     {
         _context = context;
-        _aiService = aiService;
-        _dossierService = dossierService;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Starts a new interview conversation.
+    /// Creates or finds client, creates conversation, and asks the first question.
+    /// </summary>
     public async Task<StartConversationResponse> StartConversationAsync(StartConversationRequest request)
     {
-        // Find or create client
-        var client = await _context.Clients.FirstOrDefaultAsync(c => c.Email == request.Email);
-        
-        if (client == null)
+        try
         {
-            client = new Client
+            // Find or create client
+            var client = await _context.Clients.FirstOrDefaultAsync(c => c.Email == request.Email);
+            
+            if (client == null)
             {
-                Email = request.Email,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                Status = ClientStatus.InProgress
-            };
-            _context.Clients.Add(client);
-            await _context.SaveChangesAsync();
-        }
-        else
-        {
-            // Update client status if starting new conversation
-            client.Status = ClientStatus.InProgress;
-            client.FirstName = request.FirstName ?? client.FirstName;
-            client.LastName = request.LastName ?? client.LastName;
-            await _context.SaveChangesAsync();
-        }
+                client = new Client
+                {
+                    Email = request.Email,
+                    FirstName = request.FirstName,
+                    LastName = request.LastName,
+                    Status = ClientStatus.InProgress
+                };
+                _context.Clients.Add(client);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Created new client with email: {Email}", request.Email);
+            }
+            else
+            {
+                // Check if client already has an active conversation
+                var existingConversation = await _context.Conversations
+                    .Where(c => c.ClientId == client.Id && c.Status == ConversationStatus.Active)
+                    .FirstOrDefaultAsync();
+                
+                if (existingConversation != null)
+                {
+                    throw new InvalidOperationException("You already have an active interview. Please complete it before starting a new one.");
+                }
 
-        // Create new conversation
-        var conversation = new Conversation
-        {
-            ClientId = client.Id,
-            Status = ConversationStatus.Active
-        };
-        _context.Conversations.Add(conversation);
-        await _context.SaveChangesAsync();
+                // Update client status if starting new conversation
+                client.Status = ClientStatus.InProgress;
+                client.FirstName = request.FirstName ?? client.FirstName;
+                client.LastName = request.LastName ?? client.LastName;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Updated existing client with email: {Email}", request.Email);
+            }
+
+            // Create new conversation
+            var conversation = new Conversation
+            {
+                ClientId = client.Id,
+                Status = ConversationStatus.Active
+            };
+            _context.Conversations.Add(conversation);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Created conversation {ConversationId} for client {ClientId}", conversation.Id, client.Id);
+
+            // Get first question (ordered by priority, then by ID)
+            var firstQuestion = await _context.Questions
+                .Where(q => q.IsActive)
+                .OrderByDescending(q => q.Priority)
+                .ThenBy(q => q.Id)
+                .FirstOrDefaultAsync();
+
+            if (firstQuestion == null)
+            {
+                _logger.LogError("No active questions found in database");
+                throw new InvalidOperationException("No active questions found. Please configure questions in the admin panel.");
+            }
+
+            _logger.LogInformation("Found first question: {QuestionId} - {QuestionText}", firstQuestion.Id, firstQuestion.QuestionText);
+
+            conversation.CurrentQuestionId = firstQuestion.Id;
+            await _context.SaveChangesAsync();
 
         // Generate initial greeting
         var greetingName = !string.IsNullOrEmpty(client.FirstName) ? client.FirstName : "there";
-        var initialMessage = $"Hello {greetingName}! Thank you for your interest in our services. " +
-            "I'm here to get to know you better through a friendly conversation. " +
-            "This will help us understand if we're a good fit for each other. " +
-            "Let's start with the basics - can you tell me a bit about yourself and what brings you here today?";
+        var initialMessage = $"Hello {greetingName}! Thank you for your interest. " +
+            "I'll be asking you a series of questions to get to know you better. " +
+            $"Let's start:\n\n{firstQuestion.QuestionText}";
 
         // Save assistant's initial message
         var assistantMessage = new Message
@@ -77,16 +112,32 @@ public class ConversationService
         conversation.TotalMessages++;
         await _context.SaveChangesAsync();
 
-        return new StartConversationResponse(conversation.Id, client.Id, initialMessage);
+            return new StartConversationResponse(
+                conversation.Id, 
+                client.Id, 
+                initialMessage,
+                firstQuestion.Id,
+                firstQuestion.QuestionText
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error starting conversation for email: {Email}", request.Email);
+            throw;
+        }
     }
 
+    /// <summary>
+    /// Processes a user message in the interview.
+    /// Handles: answering questions, providing additional info (yes/no), and moving to next question.
+    /// When all questions are answered, saves all answers to dossier entries organized by category.
+    /// </summary>
     public async Task<SendMessageResponse> ProcessMessageAsync(SendMessageRequest request)
     {
         var conversation = await _context.Conversations
             .Include(c => c.Client)
-            .Include(c => c.Messages)
-            .Include(c => c.AskedQuestions)
-            .ThenInclude(aq => aq.Question)
+            .Include(c => c.QuestionAnswers)
+            .ThenInclude(qa => qa.Question)
             .FirstOrDefaultAsync(c => c.Id == request.ConversationId);
 
         if (conversation == null)
@@ -110,164 +161,221 @@ public class ConversationService
         conversation.TotalMessages++;
         await _context.SaveChangesAsync();
 
-        // Build conversation history for AI
-        var conversationHistory = conversation.Messages
-            .OrderBy(m => m.CreatedAt)
-            .Select(m => new ConversationMessage
-            {
-                Role = m.Role.ToString().ToLower(),
-                Content = m.Content
-            }).ToList();
+        string assistantMessage = "";
+        bool conversationEnded = false;
 
-        // Add user's latest message
-        conversationHistory.Add(new ConversationMessage
+        // Check if we're waiting for additional info
+        if (conversation.WaitingForAdditionalInfo)
         {
-            Role = "user",
-            Content = request.Message
-        });
+            // User is providing additional info or saying no
+            var normalizedMessage = request.Message.Trim().ToLower();
+            
+            if (normalizedMessage == "yes" || normalizedMessage == "y")
+            {
+                // Ask for additional info
+                assistantMessage = "Please provide any additional information you'd like to share:";
+                // Keep WaitingForAdditionalInfo = true, will be set to false when they provide the info
+                // Don't save this "yes" as a message, just prompt for info
+            }
+            else if (normalizedMessage == "no" || normalizedMessage == "n")
+            {
+                // Move to next question
+                conversation.WaitingForAdditionalInfo = false;
+                var currentAnswer = conversation.QuestionAnswers
+                    .Where(qa => qa.QuestionId == conversation.CurrentQuestionId)
+                    .OrderByDescending(qa => qa.AnsweredAt)
+                    .FirstOrDefault();
+                
+                if (currentAnswer != null)
+                {
+                    currentAnswer.AdditionalInfo = null; // Explicitly no additional info
+                }
 
-        // Determine if we should ask a required question
-        var nextQuestion = await GetNextQuestionToAskAsync(conversation);
-        
-        string systemPrompt = await BuildSystemPromptAsync(conversation, nextQuestion);
-        
-        // Get AI response
-        var aiResponse = await _aiService.GetAIResponseAsync(conversationHistory, systemPrompt);
+                var nextQuestion = await GetNextQuestionAsync(conversation);
+                
+                if (nextQuestion == null)
+                {
+                    // All questions answered - complete conversation
+                    conversationEnded = true;
+                    conversation.Status = ConversationStatus.Completed;
+                    conversation.EndedAt = DateTime.UtcNow;
+                    assistantMessage = "Thank you for answering all the questions! Your responses have been saved. We'll review your information and get back to you soon.";
+                    
+                    // Save all answers to dossier entries
+                    await SaveAnswersToDossierAsync(conversation);
+                }
+                else
+                {
+                    conversation.CurrentQuestionId = nextQuestion.Id;
+                    assistantMessage = nextQuestion.QuestionText;
+                }
+            }
+            else
+            {
+                // User provided additional info
+                var currentAnswer = conversation.QuestionAnswers
+                    .Where(qa => qa.QuestionId == conversation.CurrentQuestionId)
+                    .OrderByDescending(qa => qa.AnsweredAt)
+                    .FirstOrDefault();
+                
+                if (currentAnswer != null)
+                {
+                    currentAnswer.AdditionalInfo = request.Message;
+                    await _context.SaveChangesAsync();
+                }
+
+                // Move to next question
+                conversation.WaitingForAdditionalInfo = false;
+                var nextQuestion = await GetNextQuestionAsync(conversation);
+                
+                if (nextQuestion == null)
+                {
+                    // All questions answered
+                    conversationEnded = true;
+                    conversation.Status = ConversationStatus.Completed;
+                    conversation.EndedAt = DateTime.UtcNow;
+                    assistantMessage = "Thank you for answering all the questions! Your responses have been saved. We'll review your information and get back to you soon.";
+                    
+                    // Update client status to InterviewCompleted
+                    var client = await _context.Clients.FindAsync(conversation.ClientId);
+                    if (client != null)
+                    {
+                        client.Status = ClientStatus.InterviewCompleted;
+                        client.UpdatedAt = DateTime.UtcNow;
+                    }
+                    
+                    // Save all answers to dossier entries
+                    await SaveAnswersToDossierAsync(conversation);
+                }
+                else
+                {
+                    conversation.CurrentQuestionId = nextQuestion.Id;
+                    assistantMessage = nextQuestion.QuestionText;
+                }
+            }
+        }
+        else
+        {
+            // User is answering the current question
+            var currentQuestion = await _context.Questions.FindAsync(conversation.CurrentQuestionId);
+            
+            if (currentQuestion == null)
+            {
+                throw new InvalidOperationException("Current question not found");
+            }
+
+            // Save the answer
+            var questionAnswer = new QuestionAnswer
+            {
+                ConversationId = conversation.Id,
+                QuestionId = currentQuestion.Id,
+                Answer = request.Message
+            };
+            _context.QuestionAnswers.Add(questionAnswer);
+            await _context.SaveChangesAsync();
+
+            // Ask if they want to provide additional info
+            conversation.WaitingForAdditionalInfo = true;
+            assistantMessage = "Would you like to provide any additional information? (yes/no)";
+        }
 
         // Save assistant message
-        var assistantMessage = new Message
+        var assistantMsg = new Message
         {
             ConversationId = conversation.Id,
             Role = MessageRole.Assistant,
-            Content = aiResponse
+            Content = assistantMessage
         };
-        _context.Messages.Add(assistantMessage);
+        _context.Messages.Add(assistantMsg);
         conversation.TotalMessages++;
+        await _context.SaveChangesAsync();
 
-        // If we suggested a question, mark it as asked
-        if (nextQuestion != null)
-        {
-            var askedQuestion = new AskedQuestion
-            {
-                ConversationId = conversation.Id,
-                QuestionId = nextQuestion.Id,
-                Answered = false // Will be marked true later by dossier extraction
-            };
-            _context.AskedQuestions.Add(askedQuestion);
-        }
+        return new SendMessageResponse(
+            assistantMsg.Id,
+            assistantMessage,
+            conversationEnded,
+            conversation.TotalMessages,
+            conversation.CurrentQuestionId,
+            conversation.WaitingForAdditionalInfo
+        );
+    }
 
-        // Extract and save dossier information from this exchange
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _dossierService.ExtractAndSaveDossierInfoAsync(
-                    conversation.ClientId, 
-                    conversation.Id, 
-                    userMessage.Content
-                );
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error extracting dossier information");
-            }
-        });
+    private async Task<Question?> GetNextQuestionAsync(Conversation conversation)
+    {
+        var answeredQuestionIds = conversation.QuestionAnswers
+            .Select(qa => qa.QuestionId)
+            .ToList();
 
-        // Check if conversation should end
-        var minMessages = int.Parse((await _aiService.GetSystemSettingsAsync())
-            .GetValueOrDefault("min_messages_threshold", "20"));
-        
-        bool conversationEnded = false;
-        if (conversation.TotalMessages >= minMessages && await AllRequiredQuestionsAskedAsync(conversation))
+        // Get next question that hasn't been answered, ordered by priority
+        var nextQuestion = await _context.Questions
+            .Where(q => q.IsActive && !answeredQuestionIds.Contains(q.Id))
+            .OrderByDescending(q => q.Priority)
+            .ThenBy(q => q.Id)
+            .FirstOrDefaultAsync();
+
+        return nextQuestion;
+    }
+
+    /// <summary>
+    /// Saves all question answers to dossier entries, organized by question category.
+    /// Each answer is saved to the appropriate category section (personal_life, business_life, etc.)
+    /// </summary>
+    private async Task SaveAnswersToDossierAsync(Conversation conversation)
+    {
+        var answers = await _context.QuestionAnswers
+            .Include(qa => qa.Question)
+            .Where(qa => qa.ConversationId == conversation.Id)
+            .ToListAsync();
+
+        foreach (var answer in answers)
         {
-            // Check if we have enough information - could be more sophisticated
-            conversationEnded = conversation.TotalMessages >= minMessages + 5;
+            // Map question category to DossierCategory (saves to different sections)
+            var category = MapCategoryToDossierCategory(answer.Question.Category);
             
-            if (conversationEnded)
+            // Save main answer to dossier entry in the appropriate category
+            var dossierEntry = new DossierEntry
             {
-                conversation.Status = ConversationStatus.Completed;
-                conversation.EndedAt = DateTime.UtcNow;
-                
-                // Trigger evaluation asynchronously
-                _ = Task.Run(async () =>
+                ClientId = conversation.ClientId,
+                Category = category,
+                KeyName = $"question_{answer.QuestionId}",
+                Value = answer.Answer,
+                ConfidenceScore = 1.0m
+            };
+            _context.DossierEntries.Add(dossierEntry);
+
+            // Save additional info if provided (also in same category)
+            if (!string.IsNullOrWhiteSpace(answer.AdditionalInfo))
+            {
+                var additionalEntry = new DossierEntry
                 {
-                    try
-                    {
-                        await _dossierService.EvaluateClientAsync(conversation.ClientId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error evaluating client");
-                    }
-                });
+                    ClientId = conversation.ClientId,
+                    Category = category,
+                    KeyName = $"question_{answer.QuestionId}_additional",
+                    Value = answer.AdditionalInfo,
+                    ConfidenceScore = 1.0m
+                };
+                _context.DossierEntries.Add(additionalEntry);
             }
         }
 
         await _context.SaveChangesAsync();
-
-        return new SendMessageResponse(
-            assistantMessage.Id,
-            aiResponse,
-            conversationEnded,
-            conversation.TotalMessages
-        );
     }
 
-    private async Task<Question?> GetNextQuestionToAskAsync(Conversation conversation)
+    private DossierCategory MapCategoryToDossierCategory(string category)
     {
-        var askedQuestionIds = conversation.AskedQuestions.Select(aq => aq.QuestionId).ToList();
-        
-        // Get required questions that haven't been asked
-        var requiredQuestion = await _context.Questions
-            .Where(q => q.IsActive && q.IsRequired && !askedQuestionIds.Contains(q.Id))
-            .OrderByDescending(q => q.Priority)
-            .FirstOrDefaultAsync();
-
-        if (requiredQuestion != null)
+        return category.ToLower() switch
         {
-            return requiredQuestion;
-        }
-
-        // Get optional questions that haven't been asked
-        var optionalQuestion = await _context.Questions
-            .Where(q => q.IsActive && !q.IsRequired && !askedQuestionIds.Contains(q.Id))
-            .OrderByDescending(q => q.Priority)
-            .FirstOrDefaultAsync();
-
-        return optionalQuestion;
-    }
-
-    private async Task<string> BuildSystemPromptAsync(Conversation conversation, Question? nextQuestion)
-    {
-        var settings = await _aiService.GetSystemSettingsAsync();
-        var basePrompt = settings.GetValueOrDefault("system_prompt",
-            "You are a professional interviewer conducting a thorough vetting conversation.");
-
-        var promptParts = new List<string> { basePrompt };
-
-        promptParts.Add("Your goal is to learn about the person's background, values, goals, and situation in a natural, conversational way.");
-        promptParts.Add("Be empathetic, professional, and ask thoughtful follow-up questions based on their responses.");
-
-        if (nextQuestion != null)
-        {
-            promptParts.Add($"\nIMPORTANT: At an appropriate point in the conversation, naturally work in this question: \"{nextQuestion.QuestionText}\"");
-        }
-
-        promptParts.Add("\nKeep responses concise (2-4 sentences) and conversational.");
-
-        return string.Join(" ", promptParts);
-    }
-
-    private async Task<bool> AllRequiredQuestionsAskedAsync(Conversation conversation)
-    {
-        var requiredQuestionIds = await _context.Questions
-            .Where(q => q.IsActive && q.IsRequired)
-            .Select(q => q.Id)
-            .ToListAsync();
-
-        var askedQuestionIds = conversation.AskedQuestions.Select(aq => aq.QuestionId).ToList();
-
-        return requiredQuestionIds.All(id => askedQuestionIds.Contains(id));
+            "personal_life" => DossierCategory.PersonalLife,
+            "business_life" => DossierCategory.BusinessLife,
+            "family" => DossierCategory.Family,
+            "childhood" => DossierCategory.Childhood,
+            "education" => DossierCategory.Education,
+            "values" => DossierCategory.Values,
+            "goals" => DossierCategory.Goals,
+            "background" => DossierCategory.Background,
+            "financial" => DossierCategory.Financial,
+            _ => DossierCategory.Other
+        };
     }
 
     public async Task<List<ConversationSummary>> GetAllConversationsAsync()
@@ -300,5 +408,28 @@ public class ConversationService
             ))
             .ToListAsync();
     }
-}
 
+    public async Task<ConversationSummary?> GetCurrentUserConversationAsync(int clientId)
+    {
+        var conversation = await _context.Conversations
+            .Include(c => c.Client)
+            .Where(c => c.ClientId == clientId)
+            .OrderByDescending(c => c.StartedAt)
+            .FirstOrDefaultAsync();
+
+        if (conversation == null)
+        {
+            return null;
+        }
+
+        return new ConversationSummary(
+            conversation.Id,
+            conversation.ClientId,
+            conversation.Client.Email,
+            conversation.StartedAt,
+            conversation.EndedAt,
+            conversation.Status.ToString(),
+            conversation.TotalMessages
+        );
+    }
+}

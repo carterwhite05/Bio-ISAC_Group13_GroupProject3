@@ -12,6 +12,9 @@ public class Conversation
     public Client Client { get; set; } = null!;
     public ICollection<Message> Messages { get; set; } = new List<Message>();
     public ICollection<AskedQuestion> AskedQuestions { get; set; } = new List<AskedQuestion>();
+    public ICollection<QuestionAnswer> QuestionAnswers { get; set; } = new List<QuestionAnswer>();
+    public int? CurrentQuestionId { get; set; }
+    public bool WaitingForAdditionalInfo { get; set; } = false;
 }
 
 public enum ConversationStatus

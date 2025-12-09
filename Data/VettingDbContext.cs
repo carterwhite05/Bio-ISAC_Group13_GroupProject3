@@ -13,10 +13,12 @@ public class VettingDbContext : DbContext
     public DbSet<DossierEntry> DossierEntries { get; set; }
     public DbSet<Question> Questions { get; set; }
     public DbSet<AskedQuestion> AskedQuestions { get; set; }
+    public DbSet<QuestionAnswer> QuestionAnswers { get; set; }
     public DbSet<Criteria> Criteria { get; set; }
     public DbSet<RedFlag> RedFlags { get; set; }
     public DbSet<RedFlagDetection> RedFlagDetections { get; set; }
     public DbSet<SystemSetting> SystemSettings { get; set; }
+    public DbSet<Document> Documents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,6 +31,8 @@ public class VettingDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(255);
+            entity.Property(e => e.Username).HasColumnName("username").HasMaxLength(100);
+            entity.Property(e => e.PasswordHash).HasColumnName("password_hash").HasMaxLength(255);
             entity.Property(e => e.FirstName).HasColumnName("first_name").HasMaxLength(100);
             entity.Property(e => e.LastName).HasColumnName("last_name").HasMaxLength(100);
             entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>();
@@ -49,6 +53,8 @@ public class VettingDbContext : DbContext
             entity.Property(e => e.EndedAt).HasColumnName("ended_at");
             entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>();
             entity.Property(e => e.TotalMessages).HasColumnName("total_messages");
+            entity.Property(e => e.CurrentQuestionId).HasColumnName("current_question_id");
+            entity.Property(e => e.WaitingForAdditionalInfo).HasColumnName("waiting_for_additional_info");
             entity.HasOne(e => e.Client).WithMany(c => c.Conversations).HasForeignKey(e => e.ClientId);
         });
 
@@ -113,6 +119,21 @@ public class VettingDbContext : DbContext
             entity.HasIndex(e => new { e.ConversationId, e.QuestionId }).IsUnique();
         });
 
+        // QuestionAnswer configuration
+        modelBuilder.Entity<QuestionAnswer>(entity =>
+        {
+            entity.ToTable("question_answers");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ConversationId).HasColumnName("conversation_id");
+            entity.Property(e => e.QuestionId).HasColumnName("question_id");
+            entity.Property(e => e.Answer).HasColumnName("answer").HasColumnType("text");
+            entity.Property(e => e.AdditionalInfo).HasColumnName("additional_info").HasColumnType("text");
+            entity.Property(e => e.AnsweredAt).HasColumnName("answered_at");
+            entity.HasOne(e => e.Conversation).WithMany(c => c.QuestionAnswers).HasForeignKey(e => e.ConversationId);
+            entity.HasOne(e => e.Question).WithMany(q => q.QuestionAnswers).HasForeignKey(e => e.QuestionId);
+        });
+
         // Criteria configuration
         modelBuilder.Entity<Criteria>(entity =>
         {
@@ -170,6 +191,24 @@ public class VettingDbContext : DbContext
             entity.Property(e => e.SettingValue).HasColumnName("setting_value").HasColumnType("text");
             entity.Property(e => e.Description).HasColumnName("description").HasColumnType("text");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        // Document configuration
+        modelBuilder.Entity<Document>(entity =>
+        {
+            entity.ToTable("documents");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ClientId).HasColumnName("client_id");
+            entity.Property(e => e.DocumentType).HasColumnName("document_type").HasMaxLength(100);
+            entity.Property(e => e.FileName).HasColumnName("file_name").HasMaxLength(255);
+            entity.Property(e => e.FilePath).HasColumnName("file_path").HasMaxLength(500);
+            entity.Property(e => e.FileSize).HasColumnName("file_size");
+            entity.Property(e => e.ContentType).HasColumnName("content_type").HasMaxLength(100);
+            entity.Property(e => e.UploadedAt).HasColumnName("uploaded_at");
+            entity.HasOne(e => e.Client).WithMany(c => c.Documents).HasForeignKey(e => e.ClientId);
+            entity.HasIndex(e => e.ClientId);
+            entity.HasIndex(e => e.DocumentType);
         });
     }
 }

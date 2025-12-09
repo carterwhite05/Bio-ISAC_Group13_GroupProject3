@@ -23,7 +23,7 @@ async function loadClients() {
     if (clients.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="9" class="text-center text-secondary">No clients yet</td>
+          <td colspan="9" class="text-center text-white">No clients yet</td>
         </tr>
       `;
     } else {
@@ -57,20 +57,20 @@ function createClientRow(client) {
   const scoreColor = getScoreColor(client.overallScore);
 
   tr.innerHTML = `
-    <td>${client.email}</td>
-    <td>${fullName}</td>
+    <td class="text-white">${client.email}</td>
+    <td class="text-white">${fullName}</td>
     <td>${statusBadge}</td>
     <td><span class="badge ${scoreColor}">${client.overallScore.toFixed(
     1
   )}</span></td>
-    <td>${client.conversationCount}</td>
-    <td>${client.dossierEntryCount}</td>
+    <td class="text-white">${client.conversationCount}</td>
+    <td class="text-white">${client.dossierEntryCount}</td>
     <td>${
       client.redFlagCount > 0
         ? `<span class="badge bg-danger">${client.redFlagCount}</span>`
-        : '-'
+        : '<span class="text-white">-</span>'
     }</td>
-    <td>${new Date(client.createdAt).toLocaleDateString()}</td>
+    <td class="text-white">${new Date(client.createdAt).toLocaleDateString()}</td>
     <td>
       <button class="btn btn-sm btn-primary" onclick="viewDossier(${
         client.id
@@ -81,6 +81,16 @@ function createClientRow(client) {
         client.id
       })">
         <i class="bi bi-arrow-repeat"></i> Re-evaluate
+      </button>
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteClient(${
+        client.id
+      })">
+        <i class="bi bi-trash"></i> Delete
+      </button>
+      <button class="btn btn-sm btn-outline-warning" onclick="updateClientStatus(${
+        client.id
+      }, '${client.status}')">
+        <i class="bi bi-pencil"></i> Update Status
       </button>
     </td>
   `;
@@ -286,6 +296,62 @@ async function evaluateClient(clientId) {
   } catch (error) {
     console.error(error);
     alert('Failed to evaluate client. Please try again.');
+  }
+}
+
+async function deleteClient(clientId) {
+  if (!confirm('Are you sure you want to delete this client and all associated data? This action cannot be undone.')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/clients/${clientId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) throw new Error('Failed to delete client');
+
+    alert('Client deleted successfully.');
+    loadClients();
+  } catch (error) {
+    console.error(error);
+    alert('Failed to delete client. Please try again.');
+  }
+}
+
+async function updateClientStatus(clientId, currentStatus) {
+  const statuses = ['Pending', 'Approved', 'Rejected', 'InProgress', 'InterviewCompleted', 'UnderReview'];
+  const currentIndex = statuses.indexOf(currentStatus);
+  
+  const statusOptions = statuses.map((status, index) => 
+    `<option value="${status}" ${index === currentIndex ? 'selected' : ''}>${status.replace(/([A-Z])/g, ' $1').trim()}</option>`
+  ).join('');
+
+  const newStatus = prompt(`Select new status:\n\n${statuses.map((s, i) => `${i + 1}. ${s.replace(/([A-Z])/g, ' $1').trim()}`).join('\n')}\n\nEnter status name:`, currentStatus);
+  
+  if (!newStatus || newStatus === currentStatus) {
+    return;
+  }
+
+  if (!statuses.includes(newStatus)) {
+    alert('Invalid status. Please enter one of the valid statuses.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/clients/${clientId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+
+    if (!response.ok) throw new Error('Failed to update client status');
+
+    alert('Client status updated successfully.');
+    loadClients();
+  } catch (error) {
+    console.error(error);
+    alert('Failed to update client status. Please try again.');
   }
 }
 

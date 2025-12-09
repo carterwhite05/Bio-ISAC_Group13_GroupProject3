@@ -37,8 +37,25 @@ public class DossierService
             // Use AI to extract structured information
             var extractionResult = await _aiService.ExtractDossierInformationAsync(conversationText);
 
+            // Check if response is valid JSON before parsing
+            if (string.IsNullOrWhiteSpace(extractionResult) || 
+                (!extractionResult.TrimStart().StartsWith("{") && !extractionResult.TrimStart().StartsWith("[")))
+            {
+                _logger.LogWarning("AI service returned non-JSON response: {Response}", extractionResult);
+                return;
+            }
+
             // Parse JSON response
-            var dossierData = JsonSerializer.Deserialize<Dictionary<string, List<DossierExtraction>>>(extractionResult);
+            Dictionary<string, List<DossierExtraction>>? dossierData;
+            try
+            {
+                dossierData = JsonSerializer.Deserialize<Dictionary<string, List<DossierExtraction>>>(extractionResult);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse dossier extraction JSON: {Response}", extractionResult);
+                return;
+            }
 
             if (dossierData != null)
             {
@@ -153,6 +170,14 @@ public class DossierService
             // Use AI for more sophisticated red flag detection
             var redFlagDescriptions = activeRedFlags.Select(rf => rf.Description ?? rf.Name).ToList();
             var aiDetectionResult = await _aiService.DetectRedFlagsAsync(fullText, redFlagDescriptions);
+
+            // Check if response is valid JSON before parsing
+            if (string.IsNullOrWhiteSpace(aiDetectionResult) || 
+                !aiDetectionResult.TrimStart().StartsWith("["))
+            {
+                _logger.LogWarning("AI service returned non-JSON response for red flags: {Response}", aiDetectionResult);
+                return;
+            }
 
             try
             {
@@ -290,6 +315,7 @@ public class DossierService
             .Include(c => c.DossierEntries)
             .Include(c => c.RedFlagDetections)
             .ThenInclude(rfd => rfd.RedFlag)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(c => c.Id == clientId);
 
         if (client == null)
@@ -335,13 +361,11 @@ public class DossierService
     public async Task<List<ClientSummaryDto>> GetAllClientsAsync()
     {
         return await _context.Clients
-            .Include(c => c.Conversations)
-            .Include(c => c.DossierEntries)
-            .Include(c => c.RedFlagDetections)
             .OrderByDescending(c => c.CreatedAt)
             .Select(c => new ClientSummaryDto(
                 c.Id,
                 c.Email,
+                c.Username,
                 c.FirstName,
                 c.LastName,
                 c.Status.ToString(),
@@ -349,9 +373,171 @@ public class DossierService
                 c.Conversations.Count,
                 c.DossierEntries.Count,
                 c.RedFlagDetections.Count,
-                c.CreatedAt
+                c.CreatedAt,
+                c.UpdatedAt
             ))
             .ToListAsync();
+    }
+
+    public async Task<ClientSummaryDto?> GetClientByEmailAsync(string email)
+    {
+        var client = await _context.Clients
+            .Where(c => c.Email == email)
+            .Select(c => new ClientSummaryDto(
+                c.Id,
+                c.Email,
+                c.Username,
+                c.FirstName,
+                c.LastName,
+                c.Status.ToString(),
+                c.OverallScore,
+                c.Conversations.Count,
+                c.DossierEntries.Count,
+                c.RedFlagDetections.Count,
+                c.CreatedAt,
+                c.UpdatedAt
+            ))
+            .FirstOrDefaultAsync();
+
+        return client;
+    }
+
+    public async Task DeleteClientAsync(int clientId)
+    {
+        try
+        {
+            var client = await _context.Clients
+                .Include(c => c.Conversations)
+                .ThenInclude(conv => conv.Messages)
+                .Include(c => c.Conversations)
+                .ThenInclude(conv => conv.QuestionAnswers)
+                .Include(c => c.DossierEntries)
+                .Include(c => c.RedFlagDetections)
+                .FirstOrDefaultAsync(c => c.Id == clientId);
+
+            if (client == null)
+            {
+                throw new InvalidOperationException("Client not found");
+            }
+
+            // Delete all related data (cascading deletes should handle this, but being explicit)
+            _context.Messages.RemoveRange(client.Conversations.SelectMany(c => c.Messages));
+            _context.QuestionAnswers.RemoveRange(client.Conversations.SelectMany(c => c.QuestionAnswers));
+            _context.Conversations.RemoveRange(client.Conversations);
+            _context.DossierEntries.RemoveRange(client.DossierEntries);
+            _context.RedFlagDetections.RemoveRange(client.RedFlagDetections);
+            
+            // Delete the client
+            _context.Clients.Remove(client);
+            
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting client {ClientId}", clientId);
+            throw;
+        }
+    }
+
+    public async Task UpdateClientStatusAsync(int clientId, string status)
+    {
+        try
+        {
+            var client = await _context.Clients.FindAsync(clientId);
+            if (client == null)
+            {
+                throw new InvalidOperationException("Client not found");
+            }
+
+            if (Enum.TryParse<ClientStatus>(status, true, out var clientStatus))
+            {
+                client.Status = clientStatus;
+                client.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                throw new ArgumentException($"Invalid status: {status}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating client status {ClientId} to {Status}", clientId, status);
+            throw;
+        }
+    }
+
+    public async Task<ClientSummaryDto> CreateOrUpdateClientAsync(CreateClientRequest request)
+    {
+        try
+        {
+            var client = await _context.Clients.FirstOrDefaultAsync(c => c.Email == request.Email);
+            
+            if (client == null)
+            {
+                // Create new client
+                client = new Client
+                {
+                    Email = request.Email,
+                    Username = request.Username,
+                    FirstName = request.FirstName,
+                    LastName = request.LastName,
+                    Status = ClientStatus.Pending
+                };
+                _context.Clients.Add(client);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Created new client with email: {Email}", request.Email);
+            }
+            else
+            {
+                // Update existing client
+                if (!string.IsNullOrEmpty(request.Username))
+                    client.Username = request.Username;
+                if (!string.IsNullOrEmpty(request.FirstName))
+                    client.FirstName = request.FirstName;
+                if (!string.IsNullOrEmpty(request.LastName))
+                    client.LastName = request.LastName;
+                client.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Updated client with email: {Email}", request.Email);
+            }
+
+            return await GetClientByEmailAsync(request.Email) ?? throw new InvalidOperationException("Failed to retrieve client");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating/updating client {Email}", request.Email);
+            throw;
+        }
+    }
+
+    public async Task<ClientSummaryDto> UpdateClientAsync(int clientId, UpdateClientRequest request)
+    {
+        try
+        {
+            var client = await _context.Clients.FindAsync(clientId);
+            if (client == null)
+            {
+                throw new InvalidOperationException("Client not found");
+            }
+
+            if (request.Username != null)
+                client.Username = request.Username;
+            if (request.FirstName != null)
+                client.FirstName = request.FirstName;
+            if (request.LastName != null)
+                client.LastName = request.LastName;
+            
+            client.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return await GetClientByEmailAsync(client.Email) ?? throw new InvalidOperationException("Failed to retrieve client");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating client {ClientId}", clientId);
+            throw;
+        }
     }
 
     private DossierCategory ParseCategory(string category)

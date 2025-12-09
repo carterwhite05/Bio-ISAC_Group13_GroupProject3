@@ -33,6 +33,7 @@ public record RedFlagDetectionDto(
 public record ClientSummaryDto(
     int Id,
     string Email,
+    string? Username,
     string? FirstName,
     string? LastName,
     string Status,
@@ -40,6 +41,7 @@ public record ClientSummaryDto(
     int ConversationCount,
     int DossierEntryCount,
     int RedFlagCount,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    DateTime? UpdatedAt = null
 );
 

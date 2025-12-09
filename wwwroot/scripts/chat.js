@@ -3,60 +3,413 @@ const API_BASE = '/api';
 let conversationId = null;
 let clientId = null;
 let messageCount = 0;
+let currentQuestionId = null;
+let waitingForAdditionalInfo = false;
+let totalQuestions = 0;
+let answeredQuestions = 0;
 
-// DOM elements
-const welcomeScreen = document.getElementById('welcomeScreen');
-const chatScreen = document.getElementById('chatScreen');
-const completionScreen = document.getElementById('completionScreen');
-const startForm = document.getElementById('startForm');
-const messageForm = document.getElementById('messageForm');
-const chatMessages = document.getElementById('chatMessages');
-const messageInput = document.getElementById('messageInput');
-const sendButton = document.getElementById('sendButton');
-const messageCountDisplay = document.getElementById('messageCount');
-const chatHeader = document.getElementById('chatHeader');
+// Load auth script if not already loaded
+if (typeof getCurrentUser === 'undefined') {
+  const script = document.createElement('script');
+  script.src = './scripts/auth.js';
+  document.head.appendChild(script);
+}
 
-// Start conversation
-startForm.addEventListener('submit', async (e) => {
+// DOM elements - wait for DOM to be ready
+let welcomeScreen, chatScreen, completionScreen, startForm, messageForm;
+let chatMessages, messageInput, sendButton, messageCountDisplay, chatHeader, progressBar;
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof requireAuth === 'undefined') {
+    console.error('auth.js not loaded');
+    // Try to load it
+    const script = document.createElement('script');
+    script.src = './scripts/auth.js';
+    document.head.appendChild(script);
+    script.onload = async () => {
+      const authResult = await requireAuth();
+      if (!authResult) {
+        return; // Redirected to login
+      }
+      initializeInterview();
+    };
+    return;
+  }
+
+  const authResult = await requireAuth();
+  if (!authResult) {
+    return; // Redirected to login page
+  }
+
+  initializeInterview();
+});
+
+async function initializeInterview() {
+  console.log('initializeInterview called');
+  
+  chatScreen = document.getElementById('chatScreen');
+  completionScreen = document.getElementById('completionScreen');
+  messageForm = document.getElementById('messageForm');
+  chatMessages = document.getElementById('chatMessages');
+  messageInput = document.getElementById('messageInput');
+  sendButton = document.getElementById('sendButton');
+  messageCountDisplay = document.getElementById('messageCount');
+  chatHeader = document.getElementById('chatHeader');
+  progressBar = document.getElementById('progressBar');
+
+  console.log('DOM elements:', {
+    chatScreen: !!chatScreen,
+    chatMessages: !!chatMessages,
+    messageInput: !!messageInput,
+    messageForm: !!messageForm
+  });
+
+  // Get logged-in user (required at this point)
+  const user = getCurrentUser();
+  if (!user) {
+    console.error('User not found, redirecting to login');
+    window.location.href = 'login.html';
+    return;
+  }
+  
+  console.log('User found:', user);
+
+  // Check if user has an active conversation
+  try {
+    const convResponse = await fetch(`${API_BASE}/conversations/current`, {
+      credentials: 'include'
+    });
+
+    if (convResponse.ok) {
+      const conversation = await convResponse.json();
+      
+      // Load existing conversation
+      conversationId = conversation.conversationId;
+      clientId = conversation.clientId;
+      
+      // Load messages
+      const messagesResponse = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+        credentials: 'include'
+      });
+      
+      if (messagesResponse.ok) {
+        const messages = await messagesResponse.json();
+        console.log('Loaded messages:', messages);
+        
+        // Display all messages
+        if (chatMessages) {
+          chatMessages.innerHTML = '';
+          if (messages.length > 0) {
+            messages.forEach(msg => {
+              addMessage(msg.role, msg.content);
+              messageCount++;
+            });
+            updateMessageCount();
+          } else {
+            // No messages found - conversation exists but is empty
+            console.warn('Conversation exists but has no messages');
+            addMessage('assistant', 'Welcome! It looks like your conversation was interrupted. Please refresh the page or contact support.');
+          }
+        }
+        
+        // Get total questions for progress
+        await fetchTotalQuestions();
+        updateProgress();
+        
+        // Show chat screen
+        if (chatScreen) {
+          showScreen(chatScreen);
+        }
+        
+        // Update header
+        const displayName = user.firstName || user.email.split('@')[0];
+        if (chatHeader) {
+          chatHeader.textContent = `Interview with ${displayName}`;
+        }
+        
+        // Check if conversation is completed
+        if (conversation.status === 'Completed') {
+          if (completionScreen) {
+            showScreen(completionScreen);
+          }
+        } else {
+          // Focus input
+          if (messageInput) {
+            setTimeout(() => messageInput.focus(), 100);
+          }
+        }
+      } else {
+        console.error('Failed to load messages:', messagesResponse.status);
+        // If we can't load messages, try starting fresh
+        await startNewInterview(user);
+      }
+    } else {
+      // No conversation exists, start new one
+      await startNewInterview(user);
+    }
+  } catch (error) {
+    console.error('Error checking conversation:', error);
+    // Try to start new interview
+    await startNewInterview(user);
+  }
+
+  // Initialize event listeners
+  if (messageForm) {
+    messageForm.addEventListener('submit', handleMessageForm);
+  }
+  if (messageInput) {
+    messageInput.addEventListener('keydown', handleKeyDown);
+  }
+}
+
+async function startNewInterview(user) {
+  console.log('Starting new interview for user:', user);
+  
+  try {
+    const response = await fetch(`${API_BASE}/conversations/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ 
+        email: user.email, 
+        firstName: user.firstName, 
+        lastName: user.lastName 
+      }),
+    });
+
+    console.log('Start conversation response status:', response.status);
+
+    if (!response.ok) {
+      let errorMessage = 'Failed to start conversation';
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || error.message || errorMessage;
+        console.error('Start conversation error:', error);
+        
+        if (error.detail && error.detail.includes('already have an active interview')) {
+          // Reload page to get the existing conversation
+          console.log('Active interview exists, reloading page...');
+          window.location.reload();
+          return;
+        }
+      } catch (parseError) {
+        console.error('Failed to parse error response:', parseError);
+        errorMessage = `Server returned ${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log('Start conversation response data:', data);
+    
+    if (!data || !data.conversationId) {
+      console.error('Invalid response data:', data);
+      throw new Error('Invalid response from server - missing conversationId');
+    }
+    
+    conversationId = data.conversationId;
+    clientId = data.clientId;
+    currentQuestionId = data.currentQuestionId || null;
+    
+    console.log('Conversation started:', { conversationId, clientId, currentQuestionId });
+
+    // Get total questions for progress
+    await fetchTotalQuestions();
+
+    // Update UI
+    const displayName = user.firstName || user.email.split('@')[0];
+    if (chatHeader) {
+      chatHeader.textContent = `Interview with ${displayName}`;
+    }
+
+    // Show chat screen
+    if (chatScreen) {
+      showScreen(chatScreen);
+    } else {
+      console.error('chatScreen element not found!');
+    }
+
+    // Display initial message
+    if (chatMessages) {
+      if (data.initialMessage) {
+        console.log('Displaying initial message:', data.initialMessage);
+        addMessage('assistant', data.initialMessage);
+        messageCount = 1;
+        updateMessageCount();
+        updateProgress();
+      } else {
+        console.error('No initial message in response:', data);
+        // Fallback: try to load messages from server
+        addMessage('assistant', 'Hello! Let\'s begin the interview. Loading your conversation...');
+        
+        // Try to reload messages from server after a short delay
+        setTimeout(async () => {
+          try {
+            console.log('Attempting to load messages for conversation:', conversationId);
+            const messagesResponse = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
+              credentials: 'include'
+            });
+            if (messagesResponse.ok) {
+              const messages = await messagesResponse.json();
+              console.log('Loaded messages from server:', messages);
+              if (messages.length > 0) {
+                chatMessages.innerHTML = '';
+                messages.forEach(msg => {
+                  addMessage(msg.role, msg.content);
+                  messageCount++;
+                });
+                updateMessageCount();
+                updateProgress();
+              } else {
+                console.warn('No messages found in database for conversation');
+                addMessage('assistant', 'I\'m ready to start! Please answer the questions as they appear.');
+              }
+            } else {
+              console.error('Failed to load messages:', messagesResponse.status);
+            }
+          } catch (err) {
+            console.error('Error loading messages:', err);
+          }
+        }, 1000);
+      }
+    } else {
+      console.error('chatMessages element not found!');
+    }
+    
+    // Focus input
+    if (messageInput) {
+      setTimeout(() => messageInput.focus(), 100);
+    } else {
+      console.error('messageInput element not found!');
+    }
+  } catch (error) {
+    console.error('Error starting interview:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Check if error is about missing documents
+    if (error.message && error.message.includes('documents')) {
+      alert('Please upload all required documents (ID and Passport) before starting the interview.\n\nYou can upload them from your dashboard.');
+      window.location.href = 'dashboard.html';
+    } else {
+      alert('Failed to start interview: ' + error.message + '\n\nCheck the browser console for more details.');
+    }
+  }
+}
+
+// Screen management
+function showScreen(screen) {
+  if (!screen) {
+    console.error('showScreen called with null/undefined screen');
+    return;
+  }
+  [chatScreen, completionScreen].forEach((s) => {
+    if (s) s.classList.remove('active');
+  });
+  screen.classList.add('active');
+  console.log('Screen shown:', screen.id);
+}
+
+// Start conversation handler
+async function handleStartForm(e) {
   e.preventDefault();
 
-  const email = document.getElementById('email').value;
-  const firstName = document.getElementById('firstName').value;
-  const lastName = document.getElementById('lastName').value;
+  // User must be logged in to start interview
+  const user = getCurrentUser();
+  if (!user) {
+    alert('You must be logged in to start an interview. Redirecting to login page...');
+    window.location.href = 'login.html';
+    return;
+  }
+
+  // Use logged-in user's information (required)
+  const email = user.email;
+  const firstName = user.firstName;
+  const lastName = user.lastName;
+  const username = user.username;
+
+  if (!email) {
+    alert('Email is required. Please log in again.');
+    window.location.href = 'login.html';
+    return;
+  }
+
+  // Disable form
+  const submitBtn = startForm.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
 
   try {
     const response = await fetch(`${API_BASE}/conversations/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email, firstName, lastName }),
     });
 
-    if (!response.ok) throw new Error('Failed to start conversation');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to start conversation');
+    }
 
     const data = await response.json();
     conversationId = data.conversationId;
     clientId = data.clientId;
+    currentQuestionId = data.currentQuestionId || null;
+
+    // Get total questions for progress
+    await fetchTotalQuestions();
 
     // Update UI
-    const displayName = firstName || email;
-    chatHeader.textContent = `Conversation with ${displayName}`;
+    const displayName = firstName || email.split('@')[0];
+    chatHeader.textContent = `Interview with ${displayName}`;
 
     // Show chat screen
-    welcomeScreen.classList.add('d-none');
-    chatScreen.classList.remove('d-none');
+    if (!chatScreen) {
+      console.error('chatScreen element not found');
+      throw new Error('Chat screen element not found');
+    }
+    showScreen(chatScreen);
 
     // Display initial message
+    if (!chatMessages) {
+      console.error('chatMessages element not found');
+      throw new Error('Chat messages container not found');
+    }
     addMessage('assistant', data.initialMessage);
     messageCount = 1;
     updateMessageCount();
+    updateProgress();
+    
+    // Focus input
+    if (messageInput) {
+      setTimeout(() => messageInput.focus(), 100);
+    }
   } catch (error) {
     console.error(error);
-    alert('Failed to start conversation. Please try again.');
+    alert(error.message || 'Failed to start conversation. Please try again.');
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="bi bi-arrow-right-circle me-2"></i>Begin Interview';
   }
-});
+}
 
-// Send message
-messageForm.addEventListener('submit', async (e) => {
+// Fetch total questions for progress tracking
+async function fetchTotalQuestions() {
+  try {
+    const response = await fetch(`${API_BASE}/admin/questions`, {
+      credentials: 'include'
+    });
+    if (response.ok) {
+      const questions = await response.json();
+      totalQuestions = questions.filter(q => q.isActive).length;
+    }
+  } catch (error) {
+    console.error('Failed to fetch questions:', error);
+  }
+}
+
+// Send message handler
+async function handleMessageForm(e) {
   e.preventDefault();
 
   const message = messageInput.value.trim();
@@ -68,86 +421,128 @@ messageForm.addEventListener('submit', async (e) => {
   messageCount++;
   updateMessageCount();
 
-  // Show typing indicator
-  const typingDiv = showTypingIndicator();
+  // Disable input while processing
+  messageInput.disabled = true;
+  sendButton.disabled = true;
+  sendButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
   try {
     const response = await fetch(`${API_BASE}/conversations/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         conversationId,
         message,
       }),
     });
 
-    if (!response.ok) throw new Error('Failed to send message');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to send message');
+    }
 
     const data = await response.json();
 
-    // Remove typing indicator
-    typingDiv.remove();
+    // Update state
+    currentQuestionId = data.currentQuestionId || null;
+    waitingForAdditionalInfo = data.waitingForAdditionalInfo || false;
+
+    // If we moved to a new question or completed, update progress
+    if (!waitingForAdditionalInfo && !data.conversationEnded) {
+      answeredQuestions++;
+    }
 
     // Add assistant response
     addMessage('assistant', data.assistantMessage);
     messageCount = data.totalMessages;
     updateMessageCount();
+    updateProgress();
 
     // Check if conversation ended
     if (data.conversationEnded) {
+      // Redirect to dashboard after a brief delay
+      // If user is logged in, they'll be automatically authenticated
       setTimeout(() => {
-        chatScreen.classList.add('d-none');
-        completionScreen.classList.remove('d-none');
+        window.location.href = 'dashboard.html';
       }, 2000);
+    } else {
+      // Re-enable input
+      messageInput.disabled = false;
+      sendButton.disabled = false;
+      sendButton.innerHTML = '<i class="bi bi-send-fill"></i>';
+      setTimeout(() => messageInput.focus(), 100);
     }
   } catch (error) {
     console.error(error);
-    typingDiv.remove();
-    alert('Failed to send message. Please try again.');
+    alert(error.message || 'Failed to send message. Please try again.');
+    // Re-enable input on error
+    messageInput.disabled = false;
+    sendButton.disabled = false;
+    sendButton.innerHTML = '<i class="bi bi-send-fill"></i>';
+    setTimeout(() => messageInput.focus(), 100);
   }
 });
 
+// Add Enter key support
+function handleKeyDown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (messageForm) {
+      messageForm.dispatchEvent(new Event('submit'));
+    }
+  }
+}
+
+
+function updateMessageCount() {
+  if (messageCountDisplay) {
+    messageCountDisplay.textContent = `${messageCount} message${
+      messageCount !== 1 ? 's' : ''
+    }`;
+  }
+}
+
+function updateProgress() {
+  if (progressBar && totalQuestions > 0) {
+    const progress = Math.min((answeredQuestions / totalQuestions) * 100, 100);
+    progressBar.style.width = `${progress}%`;
+    progressBar.setAttribute('aria-valuenow', progress);
+  }
+}
+
 function addMessage(role, content) {
+  if (!chatMessages) return;
+  
   const messageDiv = document.createElement('div');
   messageDiv.className = `message message-${role}`;
 
   const bubbleDiv = document.createElement('div');
   bubbleDiv.className = 'message-bubble';
-  bubbleDiv.textContent = content;
+  
+  // Preserve line breaks and format
+  const formattedContent = content
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+  bubbleDiv.innerHTML = formattedContent;
 
   const timeDiv = document.createElement('div');
   timeDiv.className = 'message-time';
-  timeDiv.textContent = new Date().toLocaleTimeString();
+  timeDiv.textContent = new Date().toLocaleTimeString([], { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
 
   messageDiv.appendChild(bubbleDiv);
   messageDiv.appendChild(timeDiv);
   chatMessages.appendChild(messageDiv);
 
-  // Scroll to bottom
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+  // Scroll to bottom with smooth animation
+  setTimeout(() => {
+    chatMessages.scrollTo({
+      top: chatMessages.scrollHeight,
+      behavior: 'smooth'
+    });
+  }, 100);
 }
-
-function showTypingIndicator() {
-  const typingDiv = document.createElement('div');
-  typingDiv.className = 'message message-assistant';
-  typingDiv.id = 'typing-indicator';
-
-  const indicatorDiv = document.createElement('div');
-  indicatorDiv.className = 'typing-indicator';
-  indicatorDiv.innerHTML = '<span></span><span></span><span></span>';
-
-  typingDiv.appendChild(indicatorDiv);
-  chatMessages.appendChild(typingDiv);
-
-  // Scroll to bottom
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-
-  return typingDiv;
-}
-
-function updateMessageCount() {
-  messageCountDisplay.textContent = `${messageCount} message${
-    messageCount !== 1 ? 's' : ''
-  }`;
-}
-

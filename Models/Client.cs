@@ -4,6 +4,8 @@ public class Client
 {
     public int Id { get; set; }
     public string Email { get; set; } = string.Empty;
+    public string? Username { get; set; }
+    public string PasswordHash { get; set; } = string.Empty;
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public ClientStatus Status { get; set; } = ClientStatus.Pending;
@@ -14,6 +16,7 @@ public class Client
     public ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
     public ICollection<DossierEntry> DossierEntries { get; set; } = new List<DossierEntry>();
     public ICollection<RedFlagDetection> RedFlagDetections { get; set; } = new List<RedFlagDetection>();
+    public ICollection<Document> Documents { get; set; } = new List<Document>();
 }
 
 public enum ClientStatus
@@ -21,6 +24,8 @@ public enum ClientStatus
     Pending,
     Approved,
     Rejected,
-    InProgress
+    InProgress,
+    InterviewCompleted,
+    UnderReview
 }
 

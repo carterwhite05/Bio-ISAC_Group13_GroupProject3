@@ -15,8 +15,8 @@ public static class DbSeeder
 
         // System Settings
         context.SystemSettings.AddRange(
-            new SystemSetting { SettingKey = "ai_api_provider", SettingValue = "openai", Description = "AI provider: openai, anthropic, etc." },
-            new SystemSetting { SettingKey = "ai_model", SettingValue = "gpt-4", Description = "AI model to use for conversations" },
+            new SystemSetting { SettingKey = "ai_api_provider", SettingValue = "mock", Description = "AI provider: openai, anthropic, gemini, ollama (local), mock (no API key)" },
+            new SystemSetting { SettingKey = "ai_model", SettingValue = "gemini-1.5-flash", Description = "AI model to use for conversations" },
             new SystemSetting { SettingKey = "ai_temperature", SettingValue = "0.7", Description = "Temperature for AI responses (0-1)" },
             new SystemSetting { SettingKey = "ai_max_tokens", SettingValue = "500", Description = "Max tokens per AI response" },
             new SystemSetting { SettingKey = "system_prompt", SettingValue = "You are a professional interviewer conducting a thorough vetting conversation. Be friendly, empathetic, and ask follow-up questions naturally.", Description = "Base system prompt for AI" },

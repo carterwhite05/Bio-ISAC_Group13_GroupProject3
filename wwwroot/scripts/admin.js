@@ -4,7 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadQuestions();
   loadCriteria();
   loadRedFlags();
-  loadSettings();
 });
 
 // ===== QUESTIONS =====
@@ -29,22 +28,22 @@ function displayQuestions(questions) {
   const container = document.getElementById('questionsTable');
 
   if (questions.length === 0) {
-    container.innerHTML = '<p class="text-secondary">No questions yet.</p>';
+    container.innerHTML = '<p class="text-muted">No questions yet.</p>';
     return;
   }
 
-  let html = '<div class="table-responsive"><table class="table table-hover"><thead class="table-light"><tr>';
+  let html = '<div class="table-responsive"><table class="table table-hover"><thead><tr>';
   html += '<th>Question</th><th>Category</th><th>Priority</th><th>Required</th><th>Active</th><th>Actions</th>';
   html += '</tr></thead><tbody>';
 
   questions.forEach((q) => {
     html += `
       <tr>
-        <td>${q.questionText}</td>
-        <td><span class="badge bg-secondary">${q.category}</span></td>
-        <td>${q.priority}</td>
-        <td>${q.isRequired ? '<i class="bi bi-check-circle text-success"></i>' : ''}</td>
-        <td>${q.isActive ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}</td>
+        <td class="text-white fw-normal">${q.questionText}</td>
+        <td><span class="badge bg-primary">${q.category}</span></td>
+        <td class="text-white">${q.priority}</td>
+        <td>${q.isRequired ? '<i class="bi bi-check-circle text-success fs-5"></i>' : '<i class="bi bi-x-circle text-muted fs-5"></i>'}</td>
+        <td>${q.isActive ? '<i class="bi bi-check-circle text-success fs-5"></i>' : '<i class="bi bi-x-circle text-danger fs-5"></i>'}</td>
         <td>
           <button class="btn btn-sm btn-outline-primary" onclick="editQuestion(${q.id})">Edit</button>
           <button class="btn btn-sm btn-outline-danger" onclick="deleteQuestion(${q.id})">Delete</button>
@@ -216,11 +215,11 @@ function displayCriteria(criteriaList) {
   const container = document.getElementById('criteriaTable');
 
   if (criteriaList.length === 0) {
-    container.innerHTML = '<p class="text-secondary">No criteria yet.</p>';
+    container.innerHTML = '<p class="text-muted">No criteria yet.</p>';
     return;
   }
 
-  let html = '<div class="table-responsive"><table class="table table-hover"><thead class="table-light"><tr>';
+  let html = '<div class="table-responsive"><table class="table table-hover"><thead><tr>';
   html += '<th>Name</th><th>Category</th><th>Weight</th><th>Active</th><th>Actions</th>';
   html += '</tr></thead><tbody>';
 
@@ -228,12 +227,12 @@ function displayCriteria(criteriaList) {
     html += `
       <tr>
         <td>
-          <strong>${c.name}</strong>
-          ${c.description ? `<br><small class="text-secondary">${c.description}</small>` : ''}
+          <strong class="text-white">${c.name}</strong>
+          ${c.description ? `<br><small class="text-muted">${c.description}</small>` : ''}
         </td>
-        <td>${c.category ? `<span class="badge bg-secondary">${c.category}</span>` : '-'}</td>
-        <td>${c.weight.toFixed(1)}</td>
-        <td>${c.isActive ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}</td>
+        <td>${c.category ? `<span class="badge bg-primary">${c.category}</span>` : '<span class="text-muted">-</span>'}</td>
+        <td class="text-white">${c.weight.toFixed(1)}</td>
+        <td>${c.isActive ? '<i class="bi bi-check-circle text-success fs-5"></i>' : '<i class="bi bi-x-circle text-danger fs-5"></i>'}</td>
         <td>
           <button class="btn btn-sm btn-outline-primary" onclick="editCriteria(${c.id})">Edit</button>
           <button class="btn btn-sm btn-outline-danger" onclick="deleteCriteria(${c.id})">Delete</button>
@@ -412,18 +411,18 @@ function displayRedFlags(redFlags) {
   const container = document.getElementById('redflagsTable');
 
   if (redFlags.length === 0) {
-    container.innerHTML = '<p class="text-secondary">No red flags yet.</p>';
+    container.innerHTML = '<p class="text-muted">No red flags yet.</p>';
     return;
   }
 
-  let html = '<div class="table-responsive"><table class="table table-hover"><thead class="table-light"><tr>';
+  let html = '<div class="table-responsive"><table class="table table-hover"><thead><tr>';
   html += '<th>Name</th><th>Severity</th><th>Keywords</th><th>Active</th><th>Actions</th>';
   html += '</tr></thead><tbody>';
 
   redFlags.forEach((rf) => {
     const severityBadge = {
       Low: 'bg-secondary',
-      Medium: 'bg-warning',
+      Medium: 'bg-warning text-dark',
       High: 'bg-danger',
       Critical: 'bg-dark',
     }[rf.severity];
@@ -431,12 +430,12 @@ function displayRedFlags(redFlags) {
     html += `
       <tr>
         <td>
-          <strong>${rf.name}</strong>
-          ${rf.description ? `<br><small class="text-secondary">${rf.description}</small>` : ''}
+          <strong class="text-white">${rf.name}</strong>
+          ${rf.description ? `<br><small class="text-muted">${rf.description}</small>` : ''}
         </td>
         <td><span class="badge ${severityBadge}">${rf.severity}</span></td>
-        <td><small>${rf.detectionKeywords || '-'}</small></td>
-        <td>${rf.isActive ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}</td>
+        <td><small class="text-white">${rf.detectionKeywords || '<span class="text-muted">-</span>'}</small></td>
+        <td>${rf.isActive ? '<i class="bi bi-check-circle text-success fs-5"></i>' : '<i class="bi bi-x-circle text-danger fs-5"></i>'}</td>
         <td>
           <button class="btn btn-sm btn-outline-primary" onclick="editRedFlag(${rf.id})">Edit</button>
           <button class="btn btn-sm btn-outline-danger" onclick="deleteRedFlag(${rf.id})">Delete</button>
@@ -589,81 +588,4 @@ async function deleteRedFlag(id) {
   }
 }
 
-// ===== SETTINGS =====
-
-async function loadSettings() {
-  const container = document.getElementById('settingsForm');
-  container.innerHTML = '<div class="text-center"><div class="spinner-border"></div></div>';
-
-  try {
-    const response = await fetch(`${API_BASE}/settings`);
-    if (!response.ok) throw new Error('Failed to load settings');
-
-    const settings = await response.json();
-    displaySettings(settings);
-  } catch (error) {
-    console.error(error);
-    container.innerHTML = '<div class="alert alert-danger">Failed to load settings</div>';
-  }
-}
-
-function displaySettings(settings) {
-  const container = document.getElementById('settingsForm');
-
-  let html = '<form id="settingsUpdateForm">';
-
-  settings.forEach((setting) => {
-    html += `
-      <div class="mb-3">
-        <label class="form-label"><strong>${setting.settingKey}</strong></label>
-        ${setting.description ? `<div class="form-text">${setting.description}</div>` : ''}
-        <input 
-          type="text" 
-          class="form-control" 
-          data-setting-key="${setting.settingKey}" 
-          value="${setting.settingValue || ''}"
-        />
-      </div>
-    `;
-  });
-
-  html += '<button type="submit" class="btn btn-primary">Save Settings</button>';
-  html += '</form>';
-
-  container.innerHTML = html;
-
-  document.getElementById('settingsUpdateForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await updateSettings();
-  });
-}
-
-async function updateSettings() {
-  const inputs = document.querySelectorAll('[data-setting-key]');
-  const updates = [];
-
-  inputs.forEach((input) => {
-    updates.push({
-      settingKey: input.dataset.settingKey,
-      settingValue: input.value,
-    });
-  });
-
-  try {
-    for (const update of updates) {
-      const response = await fetch(`${API_BASE}/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(update),
-      });
-
-      if (!response.ok) throw new Error(`Failed to update ${update.settingKey}`);
-    }
-
-    alert('Settings updated successfully');
-  } catch (error) {
-    console.error(error);
-    alert('Failed to update some settings');
-  }
-}
 

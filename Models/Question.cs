@@ -11,6 +11,7 @@ public class Question
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<AskedQuestion> AskedQuestions { get; set; } = new List<AskedQuestion>();
+    public ICollection<QuestionAnswer> QuestionAnswers { get; set; } = new List<QuestionAnswer>();
 }
 
 public class AskedQuestion
