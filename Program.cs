@@ -74,7 +74,7 @@ using (var scope = app.Services.CreateScope())
             throw new InvalidOperationException("Database connection failed");
         }
         
-        db.Database.EnsureCreated();
+    db.Database.EnsureCreated();
         logger.LogInformation("Database connection successful");
     }
     catch (Exception ex)
@@ -99,35 +99,50 @@ using (var scope = app.Services.CreateScope())
         }
         
         if (conversationsTableExists)
+    {
+        // Try to add columns - if they exist, MySQL will throw an error which we'll catch
+        try
         {
-            // Try to add columns - if they exist, MySQL will throw an error which we'll catch
-            try
-            {
-                db.Database.ExecuteSqlRaw("ALTER TABLE conversations ADD COLUMN current_question_id INT NULL");
-                logger.LogInformation("Added current_question_id column to conversations table");
-            }
+            db.Database.ExecuteSqlRaw("ALTER TABLE conversations ADD COLUMN current_question_id INT NULL");
+            logger.LogInformation("Added current_question_id column to conversations table");
+        }
             catch (Exception ex) when (ex.Message.Contains("Duplicate column") || ex.Message.Contains("already exists") || ex.Message.Contains("Duplicate column name"))
-            {
-                logger.LogInformation("current_question_id column already exists");
-            }
-            catch (Exception ex)
-            {
+        {
+            logger.LogInformation("current_question_id column already exists");
+        }
+        catch (Exception ex)
+        {
                 logger.LogWarning(ex, "Could not add current_question_id column: {Message}", ex.Message);
-            }
-            
-            try
-            {
-                db.Database.ExecuteSqlRaw("ALTER TABLE conversations ADD COLUMN waiting_for_additional_info BOOLEAN DEFAULT false");
-                logger.LogInformation("Added waiting_for_additional_info column to conversations table");
-            }
+        }
+        
+        try
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE conversations ADD COLUMN waiting_for_additional_info BOOLEAN DEFAULT false");
+            logger.LogInformation("Added waiting_for_additional_info column to conversations table");
+        }
             catch (Exception ex) when (ex.Message.Contains("Duplicate column") || ex.Message.Contains("already exists") || ex.Message.Contains("Duplicate column name"))
-            {
-                logger.LogInformation("waiting_for_additional_info column already exists");
-            }
-            catch (Exception ex)
-            {
+        {
+            logger.LogInformation("waiting_for_additional_info column already exists");
+        }
+        catch (Exception ex)
+        {
                 logger.LogWarning(ex, "Could not add waiting_for_additional_info column: {Message}", ex.Message);
-            }
+        }
+        
+        // Try to add review_status column to conversations table
+        try
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE conversations ADD COLUMN review_status VARCHAR(255) NULL");
+            logger.LogInformation("Added review_status column to conversations table");
+        }
+        catch (Exception ex) when (ex.Message.Contains("Duplicate column") || ex.Message.Contains("already exists") || ex.Message.Contains("Duplicate column name"))
+        {
+            logger.LogInformation("review_status column already exists");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not add review_status column: {Message}", ex.Message);
+        }
         }
         
         // Check if clients table exists before trying to alter it
@@ -144,20 +159,20 @@ using (var scope = app.Services.CreateScope())
         
         if (clientsTableExists)
         {
-            // Try to add username column to clients table
-            try
-            {
-                db.Database.ExecuteSqlRaw("ALTER TABLE clients ADD COLUMN username VARCHAR(100) NULL");
-                logger.LogInformation("Added username column to clients table");
-            }
-            catch (Exception ex) when (ex.Message.Contains("Duplicate column") || 
-                                       ex.Message.Contains("already exists") ||
-                                       ex.Message.Contains("Duplicate column name"))
-            {
-                logger.LogInformation("username column already exists");
-            }
-            catch (Exception ex)
-            {
+        // Try to add username column to clients table
+        try
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE clients ADD COLUMN username VARCHAR(100) NULL");
+            logger.LogInformation("Added username column to clients table");
+        }
+        catch (Exception ex) when (ex.Message.Contains("Duplicate column") || 
+                                   ex.Message.Contains("already exists") ||
+                                   ex.Message.Contains("Duplicate column name"))
+        {
+            logger.LogInformation("username column already exists");
+        }
+        catch (Exception ex)
+        {
                 logger.LogWarning(ex, "Could not add username column: {Message}", ex.Message);
             }
             
@@ -182,20 +197,20 @@ using (var scope = app.Services.CreateScope())
         // Create question_answers table if it doesn't exist
         try
         {
-            db.Database.ExecuteSqlRaw(@"
-                CREATE TABLE IF NOT EXISTS question_answers (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    conversation_id INT NOT NULL,
-                    question_id INT NOT NULL,
-                    answer TEXT NOT NULL,
-                    additional_info TEXT NULL,
-                    answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-                    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
-                    INDEX idx_conversation (conversation_id),
-                    INDEX idx_question (question_id)
-                )
-            ");
+        db.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS question_answers (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                conversation_id INT NOT NULL,
+                question_id INT NOT NULL,
+                answer TEXT NOT NULL,
+                additional_info TEXT NULL,
+                answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                INDEX idx_conversation (conversation_id),
+                INDEX idx_question (question_id)
+            )
+        ");
             logger.LogInformation("question_answers table ensured");
         }
         catch (Exception ex)
@@ -216,38 +231,38 @@ using (var scope = app.Services.CreateScope())
                 ").FirstOrDefault();
                 
                 if (constraintCheck == 0)
-                {
-                    db.Database.ExecuteSqlRaw(@"
-                        ALTER TABLE conversations 
-                        ADD CONSTRAINT fk_conversation_current_question 
-                        FOREIGN KEY (current_question_id) REFERENCES questions(id) ON DELETE SET NULL
-                    ");
-                    logger.LogInformation("Added foreign key constraint for current_question_id");
+        {
+            db.Database.ExecuteSqlRaw(@"
+                ALTER TABLE conversations 
+                ADD CONSTRAINT fk_conversation_current_question 
+                FOREIGN KEY (current_question_id) REFERENCES questions(id) ON DELETE SET NULL
+            ");
+            logger.LogInformation("Added foreign key constraint for current_question_id");
                 }
                 else
                 {
                     logger.LogInformation("Foreign key constraint already exists");
                 }
-            }
-            catch (Exception ex) when (ex.Message.Contains("Duplicate key") || 
-                                        ex.Message.Contains("already exists") || 
-                                        ex.Message.Contains("Duplicate foreign key constraint") ||
+        }
+        catch (Exception ex) when (ex.Message.Contains("Duplicate key") || 
+                                    ex.Message.Contains("already exists") || 
+                                    ex.Message.Contains("Duplicate foreign key constraint") ||
                                         ex.Message.Contains("Duplicate foreign key") ||
                                         ex.Message.Contains("Duplicate constraint"))
+        {
+            logger.LogInformation("Foreign key constraint already exists");
+        }
+        catch (Exception ex)
+        {
+            // Check if it's actually a duplicate error that we didn't catch
+            if (ex.Message.Contains("Duplicate") || ex.Message.Contains("already exists"))
             {
                 logger.LogInformation("Foreign key constraint already exists");
             }
-            catch (Exception ex)
+            else
             {
-                // Check if it's actually a duplicate error that we didn't catch
-                if (ex.Message.Contains("Duplicate") || ex.Message.Contains("already exists"))
-                {
-                    logger.LogInformation("Foreign key constraint already exists");
-                }
-                else
-                {
                     logger.LogWarning(ex, "Could not add foreign key constraint: {Message}", ex.Message);
-                }
+            }
             }
         }
         
@@ -286,7 +301,7 @@ using (var scope = app.Services.CreateScope())
     // Seed database
     try
     {
-        DbSeeder.Seed(db);
+    DbSeeder.Seed(db);
         logger.LogInformation("Database seeding completed");
     }
     catch (Exception ex)
@@ -484,14 +499,28 @@ app.MapPost("/api/conversations/start", async (StartConversationRequest request,
 
     try
     {
-        var response = await service.StartConversationAsync(request);
+        // Get client from database to ensure it exists
+        var client = await db.Clients.FindAsync(clientId.Value);
+        if (client == null)
+        {
+            return Results.Problem("Client not found", statusCode: 401);
+        }
+        
+        var response = await service.StartConversationAsync(clientId.Value, request.FirstName, request.LastName);
         return Results.Ok(response);
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Error in StartConversation endpoint");
+        // Log the full exception including inner exception
+        var errorMessage = ex.Message;
+        if (ex.InnerException != null)
+        {
+            errorMessage += $" Inner: {ex.InnerException.Message}";
+            logger.LogError(ex.InnerException, "Inner exception in StartConversation endpoint");
+        }
+        logger.LogError(ex, "Error in StartConversation endpoint: {ErrorMessage}", errorMessage);
         return Results.Problem(
-            detail: ex.Message,
+            detail: errorMessage,
             statusCode: 500,
             title: "Failed to start conversation"
         );
@@ -1091,6 +1120,33 @@ app.MapDelete("/api/admin/redflags/{id}", async (int id, AdminService service) =
 })
 .WithName("DeleteRedFlag")
 ;
+
+// ===== ADMIN - CONVERSATION STATUS =====
+
+app.MapPut("/api/admin/conversations/{id}/status", async (int id, UpdateConversationStatusRequest request, VettingDbContext db, ILogger<Program> logger) =>
+{
+    try
+    {
+        var conversation = await db.Conversations.FindAsync(id);
+        if (conversation == null)
+        {
+            return Results.NotFound(new { message = "Conversation not found" });
+        }
+
+        conversation.ReviewStatus = request.ReviewStatus;
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("Updated review status for conversation {ConversationId} to {ReviewStatus}", id, request.ReviewStatus);
+
+        return Results.Ok(new { message = "Conversation status updated successfully" });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error updating conversation status");
+        return Results.Problem(ex.Message);
+    }
+})
+.WithName("UpdateConversationStatus");
 
 // ===== ADMIN - SETTINGS =====
 

@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "5KGvBBj8l+zPhW1nRkhik74ZyOQbGz2+jfqnvv6DWdo=",
+  "Hash": "Gu/eU9GNP7ejSwMsBD0KV2RGrkz5atQt2pv3p0CJls8=",
   "Source": "Bio-ISAC_Group13_GroupProject3",
   "BasePath": "_content/Bio-ISAC_Group13_GroupProject3",
   "Mode": "Default",
@@ -34,25 +34,6 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\admin.html"
-    },
-    {
-      "Identity": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\clients.html",
-      "SourceId": "Bio-ISAC_Group13_GroupProject3",
-      "SourceType": "Discovered",
-      "ContentRoot": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\",
-      "BasePath": "_content/Bio-ISAC_Group13_GroupProject3",
-      "RelativePath": "clients.html",
-      "AssetKind": "All",
-      "AssetMode": "All",
-      "AssetRole": "Primary",
-      "AssetMergeBehavior": "PreferTarget",
-      "AssetMergeSource": "",
-      "RelatedAsset": "",
-      "AssetTraitName": "",
-      "AssetTraitValue": "",
-      "CopyToOutputDirectory": "Never",
-      "CopyToPublishDirectory": "PreserveNewest",
-      "OriginalItemSpec": "wwwroot\\clients.html"
     },
     {
       "Identity": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\dashboard.html",

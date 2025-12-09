@@ -1,9 +1,26 @@
 const API_BASE = '/api/admin';
 
+let dossierModal;
+
 document.addEventListener('DOMContentLoaded', () => {
+  dossierModal = new bootstrap.Modal(document.getElementById('dossierModal'));
   loadQuestions();
   loadCriteria();
   loadRedFlags();
+  loadClients();
+  
+  // Handle hash navigation to tabs
+  if (window.location.hash) {
+    const hash = window.location.hash.substring(1);
+    const tabButton = document.querySelector(`button[data-bs-target="#${hash}"]`);
+    if (tabButton) {
+      const tab = new bootstrap.Tab(tabButton);
+      tab.show();
+      if (hash === 'clients') {
+        loadClients();
+      }
+    }
+  }
 });
 
 // ===== QUESTIONS =====
@@ -588,4 +605,354 @@ async function deleteRedFlag(id) {
   }
 }
 
+// ===== CLIENTS =====
+
+window.loadClients = async function() {
+  const container = document.getElementById('clientsTable');
+  if (!container) {
+    console.error('clientsTable container not found');
+    return;
+  }
+  
+  container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="text-secondary mt-2">Loading clients...</p></div>';
+
+  try {
+    const response = await fetch('/api/clients');
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load clients: ${response.status} ${errorText}`);
+    }
+
+    const clients = await response.json();
+    console.log('Loaded clients:', clients);
+    displayClients(clients);
+  } catch (error) {
+    console.error('Error loading clients:', error);
+    container.innerHTML = `<div class="alert alert-danger">Failed to load clients: ${error.message}</div>`;
+  }
+};
+
+function displayClients(clients) {
+  const container = document.getElementById('clientsTable');
+  if (!container) {
+    console.error('clientsTable container not found in displayClients');
+    return;
+  }
+
+  if (!clients || clients.length === 0) {
+    container.innerHTML = '<div class="alert alert-info"><p class="mb-0">No clients yet.</p></div>';
+    return;
+  }
+
+  let html = '<div class="table-responsive"><table class="table table-hover"><thead><tr>';
+  html += '<th>Email</th><th>Name</th><th>Status</th><th>Score</th><th>Conversations</th><th>Entries</th><th>Red Flags</th><th>Created</th><th>Actions</th>';
+  html += '</tr></thead><tbody>';
+
+  clients.forEach((client) => {
+    const fullName = client.firstName || client.lastName
+      ? `${client.firstName || ''} ${client.lastName || ''}`.trim()
+      : '-';
+
+    const statusBadge = getClientStatusBadge(client.status);
+    const scoreColor = getClientScoreColor(client.overallScore || 0);
+    const score = (client.overallScore || 0).toFixed(1);
+
+    // Escape single quotes in status for onclick
+    const escapedStatus = (client.status || '').replace(/'/g, "\\'");
+
+    html += `
+      <tr>
+        <td class="text-white fw-normal">${client.email || '-'}</td>
+        <td class="text-white">${fullName}</td>
+        <td>${statusBadge}</td>
+        <td><span class="badge ${scoreColor}">${score}</span></td>
+        <td class="text-white">${client.conversationCount || 0}</td>
+        <td class="text-white">${client.dossierEntryCount || 0}</td>
+        <td>${
+          client.redFlagCount > 0
+            ? `<span class="badge bg-danger">${client.redFlagCount}</span>`
+            : '<span class="text-white">-</span>'
+        }</td>
+        <td class="text-white">${client.createdAt ? new Date(client.createdAt).toLocaleDateString() : '-'}</td>
+        <td>
+          <div class="btn-group" role="group">
+            <button class="btn btn-sm btn-primary" onclick="viewClientDossier(${client.id})" title="View Dossier">
+              <i class="bi bi-eye"></i> View
+            </button>
+            <button class="btn btn-sm btn-success" onclick="evaluateClient(${client.id})" title="Re-evaluate">
+              <i class="bi bi-arrow-repeat"></i> Re-evaluate
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteClient(${client.id})" title="Delete">
+              <i class="bi bi-trash"></i> Delete
+            </button>
+            <button class="btn btn-sm btn-outline-warning" onclick="updateClientStatus(${client.id}, '${escapedStatus}')" title="Update Status">
+              <i class="bi bi-pencil"></i> Update Status
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function getClientStatusBadge(status) {
+  const badges = {
+    Pending: '<span class="badge bg-warning">Pending</span>',
+    Approved: '<span class="badge bg-success">Approved</span>',
+    Rejected: '<span class="badge bg-danger">Rejected</span>',
+    InProgress: '<span class="badge bg-info">In Progress</span>',
+    InterviewCompleted: '<span class="badge bg-primary">Interview Completed</span>',
+    UnderReview: '<span class="badge bg-secondary">Under Review</span>'
+  };
+  return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
+}
+
+function getClientScoreColor(score) {
+  if (score >= 70) return 'bg-success';
+  if (score >= 50) return 'bg-warning';
+  return 'bg-danger';
+}
+
+window.viewClientDossier = async function(clientId) {
+  const content = document.getElementById('dossierContent');
+  if (!content) return;
+  
+  content.innerHTML = `
+    <div class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+  `;
+
+  dossierModal.show();
+
+  try {
+    const response = await fetch(`/api/clients/${clientId}/dossier`);
+    if (!response.ok) throw new Error('Failed to load dossier');
+
+    const dossier = await response.json();
+    displayClientDossier(dossier);
+  } catch (error) {
+    console.error(error);
+    content.innerHTML = `
+      <div class="alert alert-danger">
+        Failed to load dossier. Please try again.
+      </div>
+    `;
+  }
+}
+
+function displayClientDossier(dossier) {
+  const content = document.getElementById('dossierContent');
+  if (!content) return;
+
+  const fullName = dossier.firstName || dossier.lastName
+    ? `${dossier.firstName || ''} ${dossier.lastName || ''}`.trim()
+    : 'No name provided';
+
+  let html = `
+    <div class="row mb-4">
+      <div class="col-md-6">
+        <h5 class="text-white">${fullName}</h5>
+        <p class="text-secondary mb-1">${dossier.clientEmail}</p>
+        <p class="mb-0">
+          ${getClientStatusBadge(dossier.status)}
+          <span class="badge ${getClientScoreColor(dossier.overallScore)} ms-2">
+            Score: ${dossier.overallScore.toFixed(1)}
+          </span>
+        </p>
+      </div>
+      <div class="col-md-6 text-end">
+        <small class="text-secondary">
+          Created: ${new Date(dossier.createdAt).toLocaleString()}
+        </small>
+      </div>
+    </div>
+  `;
+
+  // Red Flags
+  if (dossier.redFlags && dossier.redFlags.length > 0) {
+    html += `
+      <div class="alert alert-danger">
+        <h6 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> Red Flags Detected</h6>
+        <ul class="mb-0">
+    `;
+    dossier.redFlags.forEach((flag) => {
+      html += `
+        <li>
+          <strong>${flag.redFlagName}</strong> (${flag.severity})
+          ${flag.detectionReason ? ` - ${flag.detectionReason}` : ''}
+          <small class="text-secondary">(Confidence: ${(flag.confidenceScore * 100).toFixed(0)}%)</small>
+        </li>
+      `;
+    });
+    html += '</ul></div>';
+  }
+
+  // Dossier Entries by Category
+  html += '<h6 class="mt-4 mb-3 text-white">Dossier Information</h6>';
+
+  const categories = {};
+  if (dossier.entries) {
+    dossier.entries.forEach((entry) => {
+      if (!categories[entry.category]) {
+        categories[entry.category] = [];
+      }
+      categories[entry.category].push(entry);
+    });
+  }
+
+  if (Object.keys(categories).length === 0) {
+    html += '<p class="text-secondary">No information extracted yet.</p>';
+  } else {
+    html += '<div class="accordion" id="dossierAccordion">';
+
+    Object.entries(categories).forEach(([category, entries], index) => {
+      const categoryId = `category-${index}`;
+      html += `
+        <div class="accordion-item" style="background: var(--bg-secondary); border-color: var(--border);">
+          <h2 class="accordion-header" id="heading-${categoryId}">
+            <button
+              class="accordion-button ${index !== 0 ? 'collapsed' : ''}"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#collapse-${categoryId}"
+              aria-expanded="${index === 0 ? 'true' : 'false'}"
+              aria-controls="collapse-${categoryId}"
+              style="background: var(--bg-secondary); color: var(--text-primary);"
+            >
+              ${formatDossierCategory(category)} (${entries.length})
+            </button>
+          </h2>
+          <div
+            id="collapse-${categoryId}"
+            class="accordion-collapse collapse ${index === 0 ? 'show' : ''}"
+            aria-labelledby="heading-${categoryId}"
+            data-bs-parent="#dossierAccordion"
+          >
+            <div class="accordion-body" style="background: var(--bg-card);">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Value</th>
+                    <th>Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+      `;
+
+      entries.forEach((entry) => {
+        const confidenceColor = entry.confidenceScore >= 0.7 ? 'success' : 'warning';
+        html += `
+          <tr>
+            <td class="text-white"><strong>${entry.keyName}</strong></td>
+            <td class="text-white">${entry.value}</td>
+            <td>
+              <span class="badge bg-${confidenceColor}">
+                ${(entry.confidenceScore * 100).toFixed(0)}%
+              </span>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    html += '</div>';
+  }
+
+  content.innerHTML = html;
+}
+
+function formatDossierCategory(category) {
+  return category
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim();
+}
+
+window.evaluateClient = async function(clientId) {
+  if (!confirm('Re-evaluate this client? This may take a moment.')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/clients/${clientId}/evaluate`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) throw new Error('Failed to evaluate client');
+
+    const data = await response.json();
+    alert(`Client evaluated successfully. Score: ${data.score.toFixed(1)}`);
+    loadClients();
+  } catch (error) {
+    console.error(error);
+    alert('Failed to evaluate client. Please try again.');
+  }
+}
+
+window.deleteClient = async function(clientId) {
+  if (!confirm('Are you sure you want to delete this client and all associated data? This action cannot be undone.')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/clients/${clientId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) throw new Error('Failed to delete client');
+
+    alert('Client deleted successfully.');
+    loadClients();
+  } catch (error) {
+    console.error(error);
+    alert('Failed to delete client. Please try again.');
+  }
+}
+
+window.updateClientStatus = async function(clientId, currentStatus) {
+  const statuses = ['Pending', 'Approved', 'Rejected', 'InProgress', 'InterviewCompleted', 'UnderReview'];
+  const currentIndex = statuses.indexOf(currentStatus);
+  
+  const newStatus = prompt(`Select new status:\n\n${statuses.map((s, i) => `${i + 1}. ${s.replace(/([A-Z])/g, ' $1').trim()}`).join('\n')}\n\nEnter status name:`, currentStatus);
+  
+  if (!newStatus || newStatus === currentStatus) {
+    return;
+  }
+
+  if (!statuses.includes(newStatus)) {
+    alert('Invalid status. Please enter one of the valid statuses.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/clients/${clientId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    });
+
+    if (!response.ok) throw new Error('Failed to update client status');
+
+    alert('Client status updated successfully.');
+    loadClients();
+  } catch (error) {
+    console.error(error);
+    alert('Failed to update client status. Please try again.');
+  }
+}
 

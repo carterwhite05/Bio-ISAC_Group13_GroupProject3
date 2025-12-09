@@ -8,6 +8,7 @@ public class Conversation
     public DateTime? EndedAt { get; set; }
     public ConversationStatus Status { get; set; } = ConversationStatus.Active;
     public int TotalMessages { get; set; } = 0;
+    public string? ReviewStatus { get; set; } // Custom review status text (e.g., "Review in progress", "Review Complete", or custom text)
 
     public Client Client { get; set; } = null!;
     public ICollection<Message> Messages { get; set; } = new List<Message>();

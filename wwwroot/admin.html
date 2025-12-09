@@ -172,7 +172,7 @@
           <a href="index.html" class="btn btn-sm btn-outline-light">
             <i class="bi bi-chat"></i> Interview
           </a>
-          <a href="clients.html" class="btn btn-sm btn-outline-light">
+          <a href="admin.html#clients" class="btn btn-sm btn-outline-light">
             <i class="bi bi-people"></i> Clients
           </a>
         </div>
@@ -217,6 +217,19 @@
             <i class="bi bi-exclamation-triangle"></i> Red Flags
           </button>
         </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="clients-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#clients"
+            type="button"
+            role="tab"
+            onclick="loadClients()"
+          >
+            <i class="bi bi-people"></i> Clients
+          </button>
+        </li>
       </ul>
 
       <div class="tab-content" id="adminTabsContent">
@@ -257,6 +270,22 @@
           <div id="redflagsTable"></div>
         </div>
 
+        <!-- Interview Status Tab -->
+        <div class="tab-pane fade" id="interviews" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="text-white fw-bold mb-0">Manage Interview Statuses</h4>
+          </div>
+          <div id="interviewsTable"></div>
+        </div>
+
+        <!-- Clients Tab -->
+        <div class="tab-pane fade" id="clients" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="text-white fw-bold mb-0">Client Management</h4>
+          </div>
+          <div id="clientsTable"></div>
+        </div>
+
       </div>
     </div>
 
@@ -269,6 +298,76 @@
       integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
       crossorigin="anonymous"
     ></script>
+
+    <!-- Dossier Modal -->
+    <div
+      class="modal fade"
+      id="dossierModal"
+      tabindex="-1"
+      aria-labelledby="dossierModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border);">
+          <div class="modal-header" style="border-bottom: 1px solid var(--border);">
+            <h5 class="modal-title text-white" id="dossierModalLabel">Client Dossier</h5>
+            <button
+              type="button"
+              class="btn-close btn-close-white"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body" id="dossierContent" style="color: var(--text-primary);">
+            <!-- Dossier content will be populated by JS -->
+          </div>
+          <div class="modal-footer" style="border-top: 1px solid var(--border);">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dossier Modal -->
+    <div
+      class="modal fade"
+      id="dossierModal"
+      tabindex="-1"
+      aria-labelledby="dossierModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border);">
+          <div class="modal-header" style="border-bottom: 1px solid var(--border);">
+            <h5 class="modal-title text-white" id="dossierModalLabel">Client Dossier</h5>
+            <button
+              type="button"
+              class="btn-close btn-close-white"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body" id="dossierContent" style="color: var(--text-primary);">
+            <!-- Dossier content will be populated by JS -->
+          </div>
+          <div class="modal-footer" style="border-top: 1px solid var(--border);">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Custom JS -->
     <script src="./scripts/admin.js"></script>

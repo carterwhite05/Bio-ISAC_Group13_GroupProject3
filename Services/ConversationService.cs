@@ -25,40 +25,35 @@ public class ConversationService
 
     /// <summary>
     /// Starts a new interview conversation.
-    /// Creates or finds client, creates conversation, and asks the first question.
+    /// Uses the authenticated clientId to create a conversation and asks the first question.
     /// </summary>
-    public async Task<StartConversationResponse> StartConversationAsync(StartConversationRequest request)
+    public async Task<StartConversationResponse> StartConversationAsync(int clientId, string? firstName = null, string? lastName = null)
     {
         try
         {
-            // Find or create client
-            var client = await _context.Clients.FirstOrDefaultAsync(c => c.Email == request.Email);
+            // Get the authenticated client
+            var client = await _context.Clients.FindAsync(clientId);
             
             if (client == null)
             {
-                client = new Client
-                {
-                    Email = request.Email,
-                    FirstName = request.FirstName,
-                    LastName = request.LastName,
-                    Status = ClientStatus.InProgress
-                };
-                _context.Clients.Add(client);
-                await _context.SaveChangesAsync();
-                _logger.LogInformation("Created new client with email: {Email}", request.Email);
+                _logger.LogError("Client not found for clientId: {ClientId}", clientId);
+                throw new InvalidOperationException("Client not found");
             }
-            else
+            
+            // Update client info if provided
+            if (!string.IsNullOrWhiteSpace(firstName))
             {
-                // Allow multiple interviews - no limit for school project
-                // Previously checked for active conversation, but now allowing multiple attempts
-                
-                // Update client status if starting new conversation
-                client.Status = ClientStatus.InProgress;
-                client.FirstName = request.FirstName ?? client.FirstName;
-                client.LastName = request.LastName ?? client.LastName;
-                await _context.SaveChangesAsync();
-                _logger.LogInformation("Updated existing client with email: {Email}", request.Email);
+                client.FirstName = firstName;
             }
+            if (!string.IsNullOrWhiteSpace(lastName))
+            {
+                client.LastName = lastName;
+            }
+            
+            // Update client status if starting new conversation
+            client.Status = ClientStatus.InProgress;
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Updated client {ClientId} for new conversation", clientId);
 
             // Create new conversation
             var conversation = new Conversation
@@ -88,22 +83,22 @@ public class ConversationService
             conversation.CurrentQuestionId = firstQuestion.Id;
             await _context.SaveChangesAsync();
 
-        // Generate initial greeting
-        var greetingName = !string.IsNullOrEmpty(client.FirstName) ? client.FirstName : "there";
-        var initialMessage = $"Hello {greetingName}! Thank you for your interest. " +
-            "I'll be asking you a series of questions to get to know you better. " +
-            $"Let's start:\n\n{firstQuestion.QuestionText}";
+            // Generate initial greeting
+            var greetingName = !string.IsNullOrEmpty(client.FirstName) ? client.FirstName : "there";
+            var initialMessage = $"Hello {greetingName}! Thank you for your interest. " +
+                "I'll be asking you a series of questions to get to know you better. " +
+                $"Let's start:\n\n{firstQuestion.QuestionText}";
 
-        // Save assistant's initial message
-        var assistantMessage = new Message
-        {
-            ConversationId = conversation.Id,
-            Role = MessageRole.Assistant,
-            Content = initialMessage
-        };
-        _context.Messages.Add(assistantMessage);
-        conversation.TotalMessages++;
-        await _context.SaveChangesAsync();
+            // Save assistant's initial message
+            var assistantMessage = new Message
+            {
+                ConversationId = conversation.Id,
+                Role = MessageRole.Assistant,
+                Content = initialMessage
+            };
+            _context.Messages.Add(assistantMessage);
+            conversation.TotalMessages++;
+            await _context.SaveChangesAsync();
 
             return new StartConversationResponse(
                 conversation.Id, 
@@ -115,7 +110,13 @@ public class ConversationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error starting conversation for email: {Email}", request.Email);
+            var errorMessage = ex.Message;
+            if (ex.InnerException != null)
+            {
+                errorMessage += $" Inner: {ex.InnerException.Message}";
+                _logger.LogError(ex.InnerException, "Inner exception when starting conversation for clientId: {ClientId}", clientId);
+            }
+            _logger.LogError(ex, "Error starting conversation for clientId: {ClientId}. Error: {ErrorMessage}", clientId, errorMessage);
             throw;
         }
     }
@@ -192,6 +193,7 @@ public class ConversationService
                     conversationEnded = true;
                     conversation.Status = ConversationStatus.Completed;
                     conversation.EndedAt = DateTime.UtcNow;
+                    conversation.ReviewStatus = "Interview complete.. waiting for review"; // Default review status
                     assistantMessage = "Thank you for answering all the questions! Your responses have been saved. We'll review your information and get back to you soon.";
                     
                     // Save all answers to dossier entries
@@ -227,6 +229,7 @@ public class ConversationService
                     conversationEnded = true;
                     conversation.Status = ConversationStatus.Completed;
                     conversation.EndedAt = DateTime.UtcNow;
+                    conversation.ReviewStatus = "Interview complete.. waiting for review"; // Default review status
                     assistantMessage = "Thank you for answering all the questions! Your responses have been saved. We'll review your information and get back to you soon.";
                     
                     // Update client status to InterviewCompleted
@@ -383,7 +386,8 @@ public class ConversationService
                 c.StartedAt,
                 c.EndedAt,
                 c.Status.ToString(),
-                c.TotalMessages
+                c.TotalMessages,
+                c.ReviewStatus
             ))
             .ToListAsync();
     }
@@ -422,7 +426,8 @@ public class ConversationService
             conversation.StartedAt,
             conversation.EndedAt,
             conversation.Status.ToString(),
-            conversation.TotalMessages
+            conversation.TotalMessages,
+            conversation.ReviewStatus
         );
     }
 }

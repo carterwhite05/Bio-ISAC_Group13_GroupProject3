@@ -28,7 +28,12 @@ public record ConversationSummary(
     DateTime StartedAt,
     DateTime? EndedAt,
     string Status,
-    int TotalMessages
+    int TotalMessages,
+    string? ReviewStatus = null
+);
+
+public record UpdateConversationStatusRequest(
+    string ReviewStatus
 );
 
 public record MessageDto(

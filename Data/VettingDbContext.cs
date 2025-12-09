@@ -55,6 +55,7 @@ public class VettingDbContext : DbContext
             entity.Property(e => e.TotalMessages).HasColumnName("total_messages");
             entity.Property(e => e.CurrentQuestionId).HasColumnName("current_question_id");
             entity.Property(e => e.WaitingForAdditionalInfo).HasColumnName("waiting_for_additional_info");
+            entity.Property(e => e.ReviewStatus).HasColumnName("review_status").HasMaxLength(255);
             entity.HasOne(e => e.Client).WithMany(c => c.Conversations).HasForeignKey(e => e.ClientId);
         });
 
