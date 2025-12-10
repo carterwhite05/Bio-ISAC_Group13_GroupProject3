@@ -37,3 +37,16 @@ public class RedFlagDetection
     public Message? Message { get; set; }
 }
 
+public class RedFlagWordlist
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string FilePath { get; set; } = string.Empty;
+    public long FileSize { get; set; }
+    public string ContentType { get; set; } = string.Empty;
+    public string Keywords { get; set; } = string.Empty; // Extracted keywords from file
+    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
+    public bool IsActive { get; set; } = true;
+}
+

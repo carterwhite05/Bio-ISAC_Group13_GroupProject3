@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Bio-ISAC_Group13_GroupProject3")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7679d128706709fba7ae3f816e61e7c6a2aee6de")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6db2563724b8684ef2edf0158482213406f8c48a")]
 [assembly: System.Reflection.AssemblyProductAttribute("Bio-ISAC_Group13_GroupProject3")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Bio-ISAC_Group13_GroupProject3")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

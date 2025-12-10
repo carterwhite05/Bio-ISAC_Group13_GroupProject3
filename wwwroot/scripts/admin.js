@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadQuestions();
   loadCriteria();
   loadRedFlags();
+  loadWordlists();
   loadClients();
   
   // Handle hash navigation to tabs
@@ -418,9 +419,281 @@ async function loadRedFlags() {
 
     const redFlags = await response.json();
     displayRedFlags(redFlags);
+    loadWordlists(); // Also load wordlists when red flags tab is loaded
   } catch (error) {
     console.error(error);
     container.innerHTML = '<div class="alert alert-danger">Failed to load red flags</div>';
+  }
+}
+
+// ===== WORDLISTS =====
+
+async function loadWordlists() {
+  const container = document.getElementById('wordlistsTable');
+  if (!container) return;
+  
+  container.innerHTML = '<div class="text-center"><div class="spinner-border"></div></div>';
+
+  try {
+    const response = await fetch(`${API_BASE}/redflags/wordlists`);
+    if (!response.ok) throw new Error('Failed to load wordlists');
+
+    const wordlists = await response.json();
+    displayWordlists(wordlists);
+  } catch (error) {
+    console.error(error);
+    container.innerHTML = '<div class="alert alert-danger">Failed to load wordlists</div>';
+  }
+}
+
+function displayWordlists(wordlists) {
+  const container = document.getElementById('wordlistsTable');
+  if (!container) return;
+
+  if (wordlists.length === 0) {
+    container.innerHTML = '<p class="text-muted">No wordlists uploaded yet.</p>';
+    return;
+  }
+
+  let html = '<div class="table-responsive"><table class="table table-hover"><thead><tr>';
+  html += '<th>Name</th><th>File</th><th>Keywords</th><th>Uploaded</th><th>Status</th><th>Actions</th>';
+  html += '</tr></thead><tbody>';
+
+  wordlists.forEach((wl) => {
+    html += `
+      <tr>
+        <td><strong class="text-white">${wl.name}</strong></td>
+        <td><small class="text-white">${wl.fileName}</small></td>
+        <td><span class="badge bg-info">${wl.keywordCount} keywords</span></td>
+        <td><small class="text-white">${new Date(wl.uploadedAt).toLocaleDateString()}</small></td>
+        <td>${wl.isActive ? '<i class="bi bi-check-circle text-success fs-5"></i>' : '<i class="bi bi-x-circle text-danger fs-5"></i>'}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary" onclick="showScanWordlistModal(${wl.id})">
+            <i class="bi bi-search"></i> Scan
+          </button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteWordlist(${wl.id})">
+            <i class="bi bi-trash"></i> Delete
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function showUploadWordlistModal() {
+  const modalId = 'uploadWordlistModal';
+
+  const modalHTML = `
+    <div class="modal fade" id="${modalId}" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Upload Wordlist</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="uploadWordlistForm" enctype="multipart/form-data">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">Name *</label>
+                <input type="text" class="form-control" id="wordlistName" required placeholder="e.g., Suspicious Keywords List" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">File *</label>
+                <input type="file" class="form-control" id="wordlistFile" accept=".txt,.csv,.json" required />
+                <small class="text-muted">Accepted formats: .txt (one keyword per line), .csv (comma-separated), .json (array of strings)</small>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary">Upload</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modalContainer').innerHTML = modalHTML;
+  const modalElement = document.getElementById(modalId);
+  const modal = new bootstrap.Modal(modalElement);
+
+  document.getElementById('uploadWordlistForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData();
+    formData.append('name', document.getElementById('wordlistName').value);
+    formData.append('file', document.getElementById('wordlistFile').files[0]);
+
+    try {
+      const response = await fetch(`${API_BASE}/redflags/wordlist/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to upload wordlist');
+      }
+
+      const data = await response.json();
+      alert(`Wordlist uploaded successfully! ${data.keywordCount} keywords extracted.`);
+      modal.hide();
+      loadWordlists();
+    } catch (error) {
+      console.error(error);
+      alert(`Failed to upload wordlist: ${error.message}`);
+    }
+  });
+
+  modal.show();
+}
+
+function showScanWordlistModal(wordlistId) {
+  const modalId = 'scanWordlistModal';
+
+  const modalHTML = `
+    <div class="modal fade" id="${modalId}" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Scan Interview Answers</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Select Client</label>
+              <select class="form-select" id="scanClientId" required>
+                <option value="">Loading clients...</option>
+              </select>
+            </div>
+            <div id="scanResults" class="mt-3"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" onclick="performScan(${wordlistId})">Scan</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modalContainer').innerHTML = modalHTML;
+  const modalElement = document.getElementById(modalId);
+  const modal = new bootstrap.Modal(modalElement);
+
+  // Load clients
+  loadClientsForScan(modal);
+
+  modal.show();
+}
+
+async function loadClientsForScan(modal) {
+  try {
+    const response = await fetch('/api/clients');
+    if (!response.ok) throw new Error('Failed to load clients');
+    
+    const clients = await response.json();
+    const select = document.getElementById('scanClientId');
+    
+    select.innerHTML = '<option value="">Select a client...</option>';
+    clients.forEach(client => {
+      const option = document.createElement('option');
+      option.value = client.id;
+      option.textContent = `${client.email}${client.firstName || client.lastName ? ` (${client.firstName || ''} ${client.lastName || ''})`.trim() : ''}`;
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error(error);
+    document.getElementById('scanClientId').innerHTML = '<option value="">Error loading clients</option>';
+  }
+}
+
+window.performScan = async function(wordlistId) {
+  const clientId = document.getElementById('scanClientId').value;
+  if (!clientId) {
+    alert('Please select a client');
+    return;
+  }
+
+  const resultsDiv = document.getElementById('scanResults');
+  resultsDiv.innerHTML = '<div class="text-center"><div class="spinner-border"></div><p class="mt-2">Scanning...</p></div>';
+
+  try {
+    const response = await fetch(`${API_BASE}/redflags/wordlist/${wordlistId}/scan/${clientId}`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to scan');
+    }
+
+    const data = await response.json();
+    displayScanResults(data);
+  } catch (error) {
+    console.error(error);
+    resultsDiv.innerHTML = `<div class="alert alert-danger">Failed to scan: ${error.message}</div>`;
+  }
+};
+
+function displayScanResults(data) {
+  const resultsDiv = document.getElementById('scanResults');
+  
+  let html = `
+    <div class="alert alert-info">
+      <strong>Scan Results</strong><br>
+      Wordlist: ${data.wordlistName}<br>
+      Client: ${data.clientEmail}<br>
+      Total Keywords: ${data.totalKeywords}<br>
+      Matches Found: <strong>${data.matchesFound}</strong>
+    </div>
+  `;
+
+  if (data.matches && data.matches.length > 0) {
+    html += '<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr>';
+    html += '<th>Keyword</th><th>Matches</th><th>Found In</th>';
+    html += '</tr></thead><tbody>';
+
+    data.matches.forEach(match => {
+      html += `
+        <tr>
+          <td><strong class="text-danger">${match.keyword}</strong></td>
+          <td>${match.matchCount}</td>
+          <td>
+            <ul class="mb-0">
+      `;
+      match.answers.forEach(answer => {
+        html += `<li><small>Q: ${answer.questionText.substring(0, 50)}...<br>A: ${(answer.answer || '').substring(0, 100)}...</small></li>`;
+      });
+      html += `
+            </ul>
+          </td>
+        </tr>
+      `;
+    });
+
+    html += '</tbody></table></div>';
+  } else {
+    html += '<div class="alert alert-success">No keyword matches found in interview answers.</div>';
+  }
+
+  resultsDiv.innerHTML = html;
+}
+
+async function deleteWordlist(id) {
+  if (!confirm('Delete this wordlist? This will also delete the uploaded file.')) return;
+
+  try {
+    const response = await fetch(`${API_BASE}/redflags/wordlist/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Failed to delete');
+
+    loadWordlists();
+  } catch (error) {
+    console.error(error);
+    alert('Failed to delete wordlist');
   }
 }
 

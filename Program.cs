@@ -291,6 +291,30 @@ using (var scope = app.Services.CreateScope())
             logger.LogWarning(ex, "Could not create documents table: {Message}", ex.Message);
         }
         
+        // Create red_flag_wordlists table if it doesn't exist
+        try
+        {
+            db.Database.ExecuteSqlRaw(@"
+                CREATE TABLE IF NOT EXISTS red_flag_wordlists (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    file_name VARCHAR(255) NOT NULL,
+                    file_path VARCHAR(500) NOT NULL,
+                    file_size BIGINT NOT NULL,
+                    content_type VARCHAR(100) NOT NULL,
+                    keywords TEXT NOT NULL,
+                    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT true,
+                    INDEX idx_is_active (is_active)
+                )
+            ");
+            logger.LogInformation("red_flag_wordlists table ensured");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not create red_flag_wordlists table: {Message}", ex.Message);
+        }
+        
         logger.LogInformation("Database migration completed successfully");
     }
     catch (Exception ex)
@@ -325,6 +349,13 @@ var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uplo
 if (!Directory.Exists(uploadsPath))
 {
     Directory.CreateDirectory(uploadsPath);
+}
+
+// Create wordlists directory if it doesn't exist
+var wordlistsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "wordlists");
+if (!Directory.Exists(wordlistsPath))
+{
+    Directory.CreateDirectory(wordlistsPath);
 }
 
 // Configure static files with default file
@@ -1119,6 +1150,311 @@ app.MapDelete("/api/admin/redflags/{id}", async (int id, AdminService service) =
     }
 })
 .WithName("DeleteRedFlag")
+;
+
+// ===== ADMIN - RED FLAG WORDLISTS =====
+
+app.MapPost("/api/admin/redflags/wordlist/upload", async (HttpContext context, VettingDbContext db, ILogger<Program> logger) =>
+{
+    try
+    {
+        if (!context.Request.HasFormContentType)
+        {
+            return Results.BadRequest(new { message = "Request must be multipart/form-data" });
+        }
+
+        var form = await context.Request.ReadFormAsync();
+        var file = form.Files["file"];
+        var name = form["name"].ToString();
+
+        if (file == null || file.Length == 0)
+        {
+            return Results.BadRequest(new { message = "No file uploaded" });
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Results.BadRequest(new { message = "Name is required" });
+        }
+
+        // Validate file type (text files, CSV, etc.)
+        var allowedExtensions = new[] { ".txt", ".csv", ".json" };
+        var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(fileExtension))
+        {
+            return Results.BadRequest(new { message = "Only .txt, .csv, and .json files are allowed" });
+        }
+
+        // Validate file size (max 5MB)
+        const long maxFileSize = 5 * 1024 * 1024; // 5MB
+        if (file.Length > maxFileSize)
+        {
+            return Results.BadRequest(new { message = "File size must be less than 5MB" });
+        }
+
+        // Create wordlists directory
+        var wordlistsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "wordlists");
+        if (!Directory.Exists(wordlistsPath))
+        {
+            Directory.CreateDirectory(wordlistsPath);
+        }
+
+        // Generate unique filename
+        var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
+        var filePath = Path.Combine(wordlistsPath, uniqueFileName);
+        var relativePath = $"/wordlists/{uniqueFileName}";
+
+        // Save file
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        // Read and extract keywords from file
+        var keywords = new List<string>();
+        
+        if (fileExtension == ".json")
+        {
+            // Handle JSON files - read all at once
+            try
+            {
+                var jsonContent = await File.ReadAllTextAsync(filePath);
+                var jsonKeywords = System.Text.Json.JsonSerializer.Deserialize<string[]>(jsonContent);
+                if (jsonKeywords != null)
+                {
+                    keywords.AddRange(jsonKeywords);
+                }
+            }
+            catch
+            {
+                // If JSON parsing fails, try reading line by line
+                using (var reader = new StreamReader(filePath))
+                {
+                    string? line;
+                    while ((line = await reader.ReadLineAsync()) != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                        {
+                            keywords.Add(line.Trim());
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Handle text and CSV files - read line by line
+            using (var reader = new StreamReader(filePath))
+            {
+                string? line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    if (fileExtension == ".csv")
+                    {
+                        // CSV - split by comma
+                        var csvKeywords = line.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        keywords.AddRange(csvKeywords);
+                    }
+                    else
+                    {
+                        // Plain text - one keyword per line
+                        if (!string.IsNullOrWhiteSpace(line))
+                        {
+                            keywords.Add(line.Trim());
+                        }
+                    }
+                }
+            }
+        }
+
+        var keywordsString = string.Join(", ", keywords.Distinct(StringComparer.OrdinalIgnoreCase));
+
+        // Save wordlist record
+        var wordlist = new RedFlagWordlist
+        {
+            Name = name,
+            FileName = file.FileName,
+            FilePath = relativePath,
+            FileSize = file.Length,
+            ContentType = file.ContentType,
+            Keywords = keywordsString,
+            UploadedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        db.RedFlagWordlists.Add(wordlist);
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("Wordlist uploaded: {WordlistId} - {Name} with {KeywordCount} keywords", wordlist.Id, name, keywords.Count);
+
+        return Results.Ok(new
+        {
+            id = wordlist.Id,
+            name = wordlist.Name,
+            fileName = wordlist.FileName,
+            keywordCount = keywords.Count,
+            keywords = keywordsString
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error uploading wordlist");
+        return Results.Problem(ex.Message);
+    }
+})
+.WithName("UploadRedFlagWordlist")
+;
+
+app.MapGet("/api/admin/redflags/wordlists", async (VettingDbContext db) =>
+{
+    try
+    {
+        var wordlists = await db.RedFlagWordlists
+            .OrderByDescending(w => w.UploadedAt)
+            .Select(w => new
+            {
+                id = w.Id,
+                name = w.Name,
+                fileName = w.FileName,
+                fileSize = w.FileSize,
+                keywordCount = w.Keywords.Split(',', StringSplitOptions.RemoveEmptyEntries).Length,
+                uploadedAt = w.UploadedAt,
+                isActive = w.IsActive
+            })
+            .ToListAsync();
+
+        return Results.Ok(wordlists);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+})
+.WithName("GetRedFlagWordlists")
+;
+
+app.MapPost("/api/admin/redflags/wordlist/{wordlistId}/scan/{clientId}", async (int wordlistId, int clientId, VettingDbContext db, ILogger<Program> logger) =>
+{
+    try
+    {
+        var wordlist = await db.RedFlagWordlists.FindAsync(wordlistId);
+        if (wordlist == null || !wordlist.IsActive)
+        {
+            return Results.NotFound(new { message = "Wordlist not found or inactive" });
+        }
+
+        var client = await db.Clients.FindAsync(clientId);
+        if (client == null)
+        {
+            return Results.NotFound(new { message = "Client not found" });
+        }
+
+        // Get all interview answers for this client
+        var conversations = await db.Conversations
+            .Where(c => c.ClientId == clientId)
+            .ToListAsync();
+
+        var conversationIds = conversations.Select(c => c.Id).ToList();
+
+        var answers = await db.QuestionAnswers
+            .Include(qa => qa.Question)
+            .Where(qa => conversationIds.Contains(qa.ConversationId))
+            .ToListAsync();
+
+        // Extract keywords from wordlist (comma-separated)
+        var keywords = wordlist.Keywords
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(k => k.Trim().ToLowerInvariant())
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Distinct()
+            .ToList();
+
+        // Scan answers for keyword matches
+        var matches = new List<object>();
+        var allAnswerText = string.Join(" ", answers.Select(a => $"{a.Answer} {a.AdditionalInfo ?? ""}").Where(t => !string.IsNullOrWhiteSpace(t))).ToLowerInvariant();
+
+        foreach (var keyword in keywords)
+        {
+            if (allAnswerText.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                // Find which answers contain this keyword
+                var matchingAnswers = answers
+                    .Where(a => 
+                        (a.Answer?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (a.AdditionalInfo?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
+                    )
+                    .Select(a => new
+                    {
+                        questionId = a.QuestionId,
+                        questionText = a.Question.QuestionText,
+                        answer = a.Answer,
+                        additionalInfo = a.AdditionalInfo
+                    })
+                    .ToList();
+
+                matches.Add(new
+                {
+                    keyword = keyword,
+                    matchCount = matchingAnswers.Count,
+                    answers = matchingAnswers
+                });
+            }
+        }
+
+        logger.LogInformation("Scanned wordlist {WordlistId} against client {ClientId}: {MatchCount} keywords found", wordlistId, clientId, matches.Count);
+
+        return Results.Ok(new
+        {
+            wordlistId = wordlistId,
+            wordlistName = wordlist.Name,
+            clientId = clientId,
+            clientEmail = client.Email,
+            totalKeywords = keywords.Count,
+            matchesFound = matches.Count,
+            matches = matches
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error scanning wordlist");
+        return Results.Problem(ex.Message);
+    }
+})
+.WithName("ScanRedFlagWordlist")
+;
+
+app.MapDelete("/api/admin/redflags/wordlist/{id}", async (int id, VettingDbContext db, ILogger<Program> logger) =>
+{
+    try
+    {
+        var wordlist = await db.RedFlagWordlists.FindAsync(id);
+        if (wordlist == null)
+        {
+            return Results.NotFound();
+        }
+
+        // Delete physical file
+        var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", wordlist.FilePath.TrimStart('/'));
+        if (File.Exists(filePath))
+        {
+            File.Delete(filePath);
+        }
+
+        // Delete database record
+        db.RedFlagWordlists.Remove(wordlist);
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("Wordlist deleted: {WordlistId}", id);
+
+        return Results.Ok(new { message = "Wordlist deleted successfully" });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error deleting wordlist");
+        return Results.Problem(ex.Message);
+    }
+})
+.WithName("DeleteRedFlagWordlist")
 ;
 
 // ===== ADMIN - CONVERSATION STATUS =====

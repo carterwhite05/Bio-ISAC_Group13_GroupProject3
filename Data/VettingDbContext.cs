@@ -17,6 +17,7 @@ public class VettingDbContext : DbContext
     public DbSet<Criteria> Criteria { get; set; }
     public DbSet<RedFlag> RedFlags { get; set; }
     public DbSet<RedFlagDetection> RedFlagDetections { get; set; }
+    public DbSet<RedFlagWordlist> RedFlagWordlists { get; set; }
     public DbSet<SystemSetting> SystemSettings { get; set; }
     public DbSet<Document> Documents { get; set; }
 
@@ -181,6 +182,22 @@ public class VettingDbContext : DbContext
             entity.HasOne(e => e.Client).WithMany(c => c.RedFlagDetections).HasForeignKey(e => e.ClientId);
             entity.HasOne(e => e.RedFlag).WithMany(r => r.Detections).HasForeignKey(e => e.RedFlagId);
             entity.HasOne(e => e.Message).WithMany().HasForeignKey(e => e.MessageId);
+        });
+
+        // RedFlagWordlist configuration
+        modelBuilder.Entity<RedFlagWordlist>(entity =>
+        {
+            entity.ToTable("red_flag_wordlists");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255);
+            entity.Property(e => e.FileName).HasColumnName("file_name").HasMaxLength(255);
+            entity.Property(e => e.FilePath).HasColumnName("file_path").HasMaxLength(500);
+            entity.Property(e => e.FileSize).HasColumnName("file_size");
+            entity.Property(e => e.ContentType).HasColumnName("content_type").HasMaxLength(100);
+            entity.Property(e => e.Keywords).HasColumnName("keywords").HasColumnType("text");
+            entity.Property(e => e.UploadedAt).HasColumnName("uploaded_at");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
         });
 
         // SystemSetting configuration
