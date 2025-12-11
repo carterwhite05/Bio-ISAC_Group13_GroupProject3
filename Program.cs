@@ -1370,7 +1370,7 @@ app.MapPost("/api/admin/redflags/wordlist/{wordlistId}/scan/{clientId}", async (
             .ToList();
 
         // Scan answers for keyword matches
-        var matches = new List<object>();
+        var matches = new List<(string keyword, int matchCount, List<object> answers)>();
         var allAnswerText = string.Join(" ", answers.Select(a => $"{a.Answer} {a.AdditionalInfo ?? ""}").Where(t => !string.IsNullOrWhiteSpace(t))).ToLowerInvariant();
 
         foreach (var keyword in keywords)
@@ -1390,18 +1390,81 @@ app.MapPost("/api/admin/redflags/wordlist/{wordlistId}/scan/{clientId}", async (
                         answer = a.Answer,
                         additionalInfo = a.AdditionalInfo
                     })
-                    .ToList();
+                    .ToList<object>();
 
-                matches.Add(new
-                {
-                    keyword = keyword,
-                    matchCount = matchingAnswers.Count,
-                    answers = matchingAnswers
-                });
+                matches.Add((keyword, matchingAnswers.Count, matchingAnswers));
             }
         }
 
-        logger.LogInformation("Scanned wordlist {WordlistId} against client {ClientId}: {MatchCount} keywords found", wordlistId, clientId, matches.Count);
+        // Create red flag detections if matches were found
+        var detectionsCreated = 0;
+        if (matches.Count > 0)
+        {
+            // Find or create a red flag for wordlist-based detections
+            var wordlistRedFlag = await db.RedFlags
+                .FirstOrDefaultAsync(rf => rf.Name == $"Wordlist Match: {wordlist.Name}");
+
+            if (wordlistRedFlag == null)
+            {
+                // Create a new red flag for this wordlist
+                wordlistRedFlag = new RedFlag
+                {
+                    Name = $"Wordlist Match: {wordlist.Name}",
+                    Description = $"Keywords from wordlist '{wordlist.Name}' detected in interview answers",
+                    Severity = RedFlagSeverity.Medium,
+                    IsActive = true,
+                    DetectionKeywords = wordlist.Keywords
+                };
+                db.RedFlags.Add(wordlistRedFlag);
+                await db.SaveChangesAsync();
+            }
+
+            // Check if we already have a detection for this wordlist and client (to avoid duplicates)
+            var existingDetection = await db.RedFlagDetections
+                .FirstOrDefaultAsync(rfd => rfd.ClientId == clientId && rfd.RedFlagId == wordlistRedFlag.Id);
+
+            // Build detection reason with matched keywords
+            var matchedKeywords = matches.Select(m => m.keyword).Take(10).ToList();
+            var detectionReason = $"Found {matches.Count} keyword(s) from wordlist '{wordlist.Name}' in interview answers: {string.Join(", ", matchedKeywords)}";
+            if (matches.Count > 10)
+            {
+                detectionReason += $" and {matches.Count - 10} more";
+            }
+
+            var confidenceScore = keywords.Count > 0 
+                ? Math.Min((decimal)matches.Count / keywords.Count * 100, 100) 
+                : 0;
+
+            if (existingDetection == null)
+            {
+                // Create a single detection record for all matches
+                var detection = new RedFlagDetection
+                {
+                    ClientId = clientId,
+                    RedFlagId = wordlistRedFlag.Id,
+                    DetectionReason = detectionReason,
+                    ConfidenceScore = confidenceScore,
+                    DetectedAt = DateTime.UtcNow
+                };
+
+                db.RedFlagDetections.Add(detection);
+                await db.SaveChangesAsync();
+                detectionsCreated = 1;
+            }
+            else
+            {
+                // Update existing detection with latest scan results
+                existingDetection.DetectionReason = detectionReason;
+                existingDetection.ConfidenceScore = confidenceScore;
+                existingDetection.DetectedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+        }
+
+        logger.LogInformation("Scanned wordlist {WordlistId} against client {ClientId}: {MatchCount} keywords found, {DetectionsCreated} detection(s) created/updated", wordlistId, clientId, matches.Count, detectionsCreated);
+
+        // Get updated red flag count for the client
+        var redFlagCount = await db.RedFlagDetections.Where(rfd => rfd.ClientId == clientId).CountAsync();
 
         return Results.Ok(new
         {
@@ -1411,7 +1474,14 @@ app.MapPost("/api/admin/redflags/wordlist/{wordlistId}/scan/{clientId}", async (
             clientEmail = client.Email,
             totalKeywords = keywords.Count,
             matchesFound = matches.Count,
-            matches = matches
+            matches = matches.Select(m => new
+            {
+                keyword = m.keyword,
+                matchCount = m.matchCount,
+                answers = m.answers
+            }).ToList(),
+            detectionsCreated = detectionsCreated,
+            redFlagCount = redFlagCount
         });
     }
     catch (Exception ex)

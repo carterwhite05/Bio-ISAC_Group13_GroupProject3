@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "Gu/eU9GNP7ejSwMsBD0KV2RGrkz5atQt2pv3p0CJls8=",
+  "Hash": "I1LJ2ZDkblmGvJ0QyjEPTZFaioMHTEjSGb73PjmRAUU=",
   "Source": "Bio-ISAC_Group13_GroupProject3",
   "BasePath": "_content/Bio-ISAC_Group13_GroupProject3",
   "Mode": "Default",
@@ -243,6 +243,25 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\styles\\main.css"
+    },
+    {
+      "Identity": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\wordlists\\96551b75-3cdd-45ae-9c44-d9468bc38dee.txt",
+      "SourceId": "Bio-ISAC_Group13_GroupProject3",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\",
+      "BasePath": "_content/Bio-ISAC_Group13_GroupProject3",
+      "RelativePath": "wordlists/96551b75-3cdd-45ae-9c44-d9468bc38dee.txt",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\wordlists\\96551b75-3cdd-45ae-9c44-d9468bc38dee.txt"
     }
   ]
 }

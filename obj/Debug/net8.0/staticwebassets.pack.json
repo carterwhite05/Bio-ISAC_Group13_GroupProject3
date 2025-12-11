@@ -49,6 +49,10 @@
       "PackagePath": "staticwebassets\\styles\\main.css"
     },
     {
+      "Id": "C:\\Users\\shiel\\OneDrive\\Desktop\\2025MIS321\\Bio-ISAC_Group13_GroupProject3\\wwwroot\\wordlists\\96551b75-3cdd-45ae-9c44-d9468bc38dee.txt",
+      "PackagePath": "staticwebassets\\wordlists\\96551b75-3cdd-45ae-9c44-d9468bc38dee.txt"
+    },
+    {
       "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.Bio-ISAC_Group13_GroupProject3.Microsoft.AspNetCore.StaticWebAssets.props",
       "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
     },

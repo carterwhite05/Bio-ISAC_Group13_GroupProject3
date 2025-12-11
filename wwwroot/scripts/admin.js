@@ -633,6 +633,15 @@ window.performScan = async function(wordlistId) {
 
     const data = await response.json();
     displayScanResults(data);
+    
+    // Refresh clients list to show updated red flag count
+    if (data.detectionsCreated > 0 || data.redFlagCount !== undefined) {
+      // Only refresh if we're on the clients tab or if clients are visible
+      const clientsTab = document.getElementById('clients-tab');
+      if (clientsTab && clientsTab.classList.contains('active')) {
+        loadClients();
+      }
+    }
   } catch (error) {
     console.error(error);
     resultsDiv.innerHTML = `<div class="alert alert-danger">Failed to scan: ${error.message}</div>`;
@@ -643,12 +652,14 @@ function displayScanResults(data) {
   const resultsDiv = document.getElementById('scanResults');
   
   let html = `
-    <div class="alert alert-info">
+    <div class="alert ${data.matchesFound > 0 ? 'alert-warning' : 'alert-success'}">
       <strong>Scan Results</strong><br>
       Wordlist: ${data.wordlistName}<br>
       Client: ${data.clientEmail}<br>
       Total Keywords: ${data.totalKeywords}<br>
-      Matches Found: <strong>${data.matchesFound}</strong>
+      Matches Found: <strong>${data.matchesFound}</strong><br>
+      ${data.detectionsCreated > 0 ? `<span class="badge bg-danger">Red Flag Created!</span><br>` : ''}
+      ${data.redFlagCount !== undefined ? `Client Red Flag Count: <strong>${data.redFlagCount}</strong>` : ''}
     </div>
   `;
 
